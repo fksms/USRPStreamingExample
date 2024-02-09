@@ -1,0 +1,45 @@
+{
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "build(Debug)",
+            "command": "sh",
+            "args": [
+                "build.sh",
+                "debug"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": ""
+        },
+        {
+            "type": "cppbuild",
+            "label": "build(Release)",
+            "command": "sh",
+            "args": [
+                "build.sh",
+                "release"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": ""
+        }
+    ],
+    "version": "2.0.0"
+}
