@@ -4,8 +4,8 @@
 #include <stdint.h>
 
 typedef struct _sample_buf_t {
-    unsigned long num;
-    int8_t samples[];
+    size_t num_of_samples;
+    int16_t samples[];
 } sample_buf_t;
 
 #endif

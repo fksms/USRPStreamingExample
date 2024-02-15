@@ -86,8 +86,9 @@ void *usrp_stream_thread(void *arg) {
     void *buf = NULL;
     uhd_rx_metadata_error_code_t error_code;    
 
+    // CPUフォーマットは complex<int16_t> を指定
     uhd_stream_args_t stream_args = {
-        .cpu_format = "fc32",
+        .cpu_format = "sc16",
         .otw_format = "sc16",
         .args = "",
         .channel_list = &channel,
@@ -129,22 +130,32 @@ void *usrp_stream_thread(void *arg) {
 
     // Actual streaming
     while (running) {
-        sample_buf_t *sb = malloc(sizeof(*sb) + samps_per_buff * 2 * sizeof(float));
+        // --------------- バッファ取得 ---------------
+        //
+        // バッファあたりの確保するメモリ量
+        // (sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t))
+        //
+        // sizeof(size_t)   ：受信したサンプル数を格納する用
+        // samps_per_buff   ：1回あたりに受信するサンプル数
+        // 2                ：I+Q
+        // sizeof(int16_t)  ：1サンプルあたりのサイズ（int16_t）
+        //
+        // ------------------------------------------
+        sample_buf_t *sb = malloc(sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t));
         buf = sb->samples;
         uhd_rx_streamer_recv(rx_streamer, &buf, samps_per_buff, &md, 3.0, false, &num_rx_samps);
-        printf("%zu\n", num_rx_samps);
 	    uhd_rx_metadata_error_code(md, &error_code);
 
         // エラー有りの場合は解放して終了
-        if(error_code != UHD_RX_METADATA_ERROR_CODE_NONE) {
-            printf("%d\n", error_code);
+        if(error_code) {
+            printf("Streaming Error: %d\n", error_code);
             free(sb);
             break;
         }
-        sb->num = num_rx_samps;
+        sb->num_of_samples = num_rx_samps;
 
         // キューへの追加が失敗した場合は解放して終了
-        if (blocking_queue_add(&samples_queue, &sb) != 0) {
+        if (blocking_queue_add(&samples_queue, &sb)) {
             printf("Buffer is full.\n");
             free(sb);
             break;

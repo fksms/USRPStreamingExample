@@ -34,6 +34,8 @@ void *test_thread(void *arg) {
 
     sample_buf_t *sb = NULL;
 
+    int i =0;
+
     while (running) {
 
         if (blocking_queue_take(&samples_queue, &sb) != 0) {
@@ -42,7 +44,10 @@ void *test_thread(void *arg) {
             break;
         }
 
-        printf("aa\n");
+        i++;
+
+        printf("%d\n", i);
+        //printf("%f\n", sb->samples[0]);
     }
     running = 0;
 
@@ -66,12 +71,6 @@ void print_help(void)
 
 int main(int argc, char* argv[])
 {
-    uhd_usrp_handle usrp = NULL;
-
-    pthread_t test;
-    pthread_t usrp_stream;
-
-
     int option = 0;
     // Process options
     while ((option = getopt(argc, argv, "a:c:f:r:g:h")) != -1) {
@@ -108,7 +107,18 @@ int main(int argc, char* argv[])
 
     if (!device_args)
         device_args = strdup("");
-    
+
+
+
+    // USRP handle
+    uhd_usrp_handle usrp = NULL;
+
+    struct sched_param param;
+
+    pthread_t test;
+    pthread_t usrp_stream;
+    pthread_attr_t attr;
+
 
     // Init the blocking queue.
     blocking_queue_init(&samples_queue, SAMPLES_QUEUE_SIZE);
@@ -117,9 +127,42 @@ int main(int argc, char* argv[])
     usrp = usrp_setup();
 
 
+    // Initialize pthread attributes
+    if (pthread_attr_init(&attr)) {
+        printf("init pthread attributes failed\n");
+        return 1;
+    }
+
+    // Set scheduler policy and priority of pthread
+    if (pthread_attr_setschedpolicy(&attr, SCHED_RR)) {
+        printf("pthread setschedpolicy failed\n");
+        return 1;
+    }
+
+    param.sched_priority = 127;
+
+    if (pthread_attr_setschedparam(&attr, &param)) {
+        printf("pthread setschedparam failed\n");
+        return 1;
+    }
+
+        // Use scheduling parameters of attr
+    if (pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED)) {
+        printf("pthread setinheritsched failed\n");
+        return 1;
+    }
+
     // Create thread
-    pthread_create(&test, NULL, test_thread, NULL);
-    pthread_create(&usrp_stream, NULL, usrp_stream_thread, (void *)usrp);
+    if (pthread_create(&test, NULL, test_thread, NULL)) {
+        printf("create pthread failed\n");
+        return 1;
+    }
+
+    if (pthread_create(&usrp_stream, &attr, usrp_stream_thread, (void *)usrp)) {
+        printf("create pthread failed\n");
+        return 1;
+    }
+
 
     while (running) {
         pause();
