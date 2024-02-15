@@ -34,20 +34,21 @@ void *test_thread(void *arg) {
 
     sample_buf_t *sb = NULL;
 
-    int i =0;
+    int i = 0;
 
     while (running) {
 
-        if (blocking_queue_take(&samples_queue, &sb) != 0) {
+        if (blocking_queue_take(&samples_queue, &sb)) {
             printf("Unknown error.\n");
             free(sb);
             break;
         }
 
-        i++;
-
         printf("%d\n", i);
-        //printf("%f\n", sb->samples[0]);
+
+        free(sb);
+
+        i++;
     }
     running = 0;
 

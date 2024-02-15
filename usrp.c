@@ -128,20 +128,20 @@ void *usrp_stream_thread(void *arg) {
     if (error)
         printf("%u\n", error);
 
+    // ----------------------------------------
+    // バッファあたりの確保するメモリ量
+    // (sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t))
+    //
+    // sizeof(size_t)   ：受信したサンプル数を格納する用
+    // samps_per_buff   ：1回あたりに受信するサンプル数
+    // 2                ：I+Q
+    // sizeof(int16_t)  ：1サンプルあたりのサイズ（int16_t）
+    // ----------------------------------------
+    size_t buf_size = sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t);
+
     // Actual streaming
     while (running) {
-        // --------------- バッファ取得 ---------------
-        //
-        // バッファあたりの確保するメモリ量
-        // (sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t))
-        //
-        // sizeof(size_t)   ：受信したサンプル数を格納する用
-        // samps_per_buff   ：1回あたりに受信するサンプル数
-        // 2                ：I+Q
-        // sizeof(int16_t)  ：1サンプルあたりのサイズ（int16_t）
-        //
-        // ------------------------------------------
-        sample_buf_t *sb = malloc(sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t));
+        sample_buf_t *sb = malloc(buf_size);
         buf = sb->samples;
         uhd_rx_streamer_recv(rx_streamer, &buf, samps_per_buff, &md, 3.0, false, &num_rx_samps);
 	    uhd_rx_metadata_error_code(md, &error_code);
@@ -155,7 +155,7 @@ void *usrp_stream_thread(void *arg) {
         sb->num_of_samples = num_rx_samps;
 
         // キューへの追加が失敗した場合は解放して終了
-        if (blocking_queue_add(&samples_queue, &sb)) {
+        if (blocking_queue_add(&samples_queue, sb)) {
             printf("Buffer is full.\n");
             free(sb);
             break;
