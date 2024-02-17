@@ -4,6 +4,27 @@
         "stdlib.h": "c",
         "stdint.h": "c",
         "pthread.h": "c",
-        "sched.h": "c"
+        "sched.h": "c",
+        "cstdlib": "c",
+        "locale": "c",
+        "new": "c",
+        "ostream": "c",
+        "memory_resource": "c",
+        "memory": "c",
+        "__debug": "cpp",
+        "exception": "cpp",
+        "type_traits": "cpp",
+        "limits": "cpp",
+        "string": "cpp",
+        "string_view": "cpp",
+        "vector": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "cwchar": "cpp",
+        "functional": "cpp",
+        "sstream": "cpp",
+        "stdexcept": "cpp",
+        "queue": "cpp",
+        "array_blocking_queue_integer.h": "c"
     }
 }
