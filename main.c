@@ -10,14 +10,13 @@
 #define C_FEK_ARRAY_BLOCKING_QUEUE_INTEGER_IMPLEMENTATION
 #define C_FEK_FAIR_LOCK_IMPLEMENTATION
 
-#include "structure.h"
 #include "array_blocking_queue_integer.h"
 #include "usrp.h"
 
 
 // --------------------global--------------------
 // Center frequency
-double freq          = 500e6;
+double freq          = 2400e6;
 // Sampling rate
 double rate          = 20e6;
 // Gain
@@ -52,7 +51,7 @@ void *test_thread(void *arg) {
             break;
         }
 
-        printf("%d\t\t%d\n", i, array_index);
+        printf("%d\t\t%d\t\t%d\t\t%d\n", i, array_index, buffs[array_index].samples[0], buffs[array_index].samples[1]);
 
         i++;
     }
@@ -180,7 +179,7 @@ int main(int argc, char* argv[])
     free(buffs);
 
     // Closes the blocking queue.
-    blocking_queue_close(&bq1);
+    blocking_queue_destroy(&bq1);
 
     return 0;
 }

@@ -5,8 +5,8 @@
 
 #include <uhd.h>
 
-#include "structure.h"
 #include "array_blocking_queue_integer.h"
+#include "usrp.h"
 
 
 // --------------------global--------------------
