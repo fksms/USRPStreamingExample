@@ -7,46 +7,52 @@
 
 #include <uhd.h>
 
-#define C_FEK_BLOCKING_QUEUE_IMPLEMENTATION
+#define C_FEK_ARRAY_BLOCKING_QUEUE_INTEGER_IMPLEMENTATION
 #define C_FEK_FAIR_LOCK_IMPLEMENTATION
 
 #include "structure.h"
-#include "blocking_queue.h"
+#include "array_blocking_queue_integer.h"
 #include "usrp.h"
 
 
-// Queue size
-#define SAMPLES_QUEUE_SIZE 32
-
-
+// --------------------global--------------------
+// Center frequency
 double freq          = 500e6;
+// Sampling rate
 double rate          = 20e6;
+// Gain
 double gain          = 5.0;
+// Device args
 char* device_args    = NULL;
+// Channel
 size_t channel       = 0;
 
-int running = 1;
 
-Blocking_Queue samples_queue;
+// サンプルを格納するためのバッファ
+sample_buf_t *buffs;
+// バッファ内のサンプルが格納された位置を格納
+Array_Blocking_Queue_Integer bq1;
+
+
+// 動作ステータス
+int running = 1;
+// ----------------------------------------------
 
 
 void *test_thread(void *arg) {
 
-    sample_buf_t *sb = NULL;
+    int array_index;
 
-    int i = 0;
+    unsigned int i = 0;
 
     while (running) {
 
-        if (blocking_queue_take(&samples_queue, &sb)) {
+        if (blocking_queue_take(&bq1, &array_index)) {
             printf("Unknown error.\n");
-            free(sb);
             break;
         }
 
-        printf("%d\n", i);
-
-        free(sb);
+        printf("%d\t\t%d\n", i, array_index);
 
         i++;
     }
@@ -122,7 +128,7 @@ int main(int argc, char* argv[])
 
 
     // Init the blocking queue.
-    blocking_queue_init(&samples_queue, SAMPLES_QUEUE_SIZE);
+    blocking_queue_init(&bq1, SAMPLES_QUEUE_SIZE);
 
     // USRP setup
     usrp = usrp_setup();
@@ -170,14 +176,11 @@ int main(int argc, char* argv[])
     }
     running = 0;
 
-    // キュー内の要素（sample_buf_t）を全て取り出して解放
-    sample_buf_t *sb = NULL;
-    while(blocking_queue_poll(&samples_queue, &sb) == 0) {
-        free(sb);
-    }
+    // メモリ解放
+    free(buffs);
 
     // Closes the blocking queue.
-    blocking_queue_close(&samples_queue);
+    blocking_queue_close(&bq1);
 
     return 0;
 }

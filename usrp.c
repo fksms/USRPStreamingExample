@@ -6,18 +6,21 @@
 #include <uhd.h>
 
 #include "structure.h"
-#include "blocking_queue.h"
+#include "array_blocking_queue_integer.h"
 
 
+// --------------------global--------------------
 extern double freq;
 extern double rate;
 extern double gain;
 extern char *device_args;
 extern size_t channel;
 
-extern int running;
+extern sample_buf_t *buffs;
+extern Array_Blocking_Queue_Integer bq1;
 
-extern Blocking_Queue samples_queue;
+extern int running;
+// ----------------------------------------------
 
 
 uhd_usrp_handle usrp_setup(void) {
@@ -84,7 +87,7 @@ void *usrp_stream_thread(void *arg) {
 
     size_t samps_per_buff, num_rx_samps;
     void *buf = NULL;
-    uhd_rx_metadata_error_code_t error_code;    
+    uhd_rx_metadata_error_code_t error_code;
 
     // CPUフォーマットは complex<int16_t> を指定
     uhd_stream_args_t stream_args = {
@@ -133,33 +136,39 @@ void *usrp_stream_thread(void *arg) {
     // (sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t))
     //
     // sizeof(size_t)   ：受信したサンプル数を格納する用
-    // samps_per_buff   ：1回あたりに受信するサンプル数
+    // samps_per_buff   ：1回で取得するサンプリング数
     // 2                ：I+Q
     // sizeof(int16_t)  ：1サンプルあたりのサイズ（int16_t）
     // ----------------------------------------
     size_t buf_size = sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t);
+    buffs = (sample_buf_t *)malloc(buf_size * SAMPLES_QUEUE_SIZE);
+
+    // 配列のインデックス
+    int array_index = 0;
 
     // Actual streaming
     while (running) {
-        sample_buf_t *sb = malloc(buf_size);
-        buf = sb->samples;
+        buf = buffs[array_index].samples;
         uhd_rx_streamer_recv(rx_streamer, &buf, samps_per_buff, &md, 3.0, false, &num_rx_samps);
 	    uhd_rx_metadata_error_code(md, &error_code);
 
         // エラー有りの場合は解放して終了
         if(error_code) {
             printf("Streaming Error: %d\n", error_code);
-            free(sb);
             break;
         }
-        sb->num_of_samples = num_rx_samps;
+        buffs[array_index].num_of_samples = num_rx_samps;
 
         // キューへの追加が失敗した場合は解放して終了
-        if (blocking_queue_add(&samples_queue, sb)) {
+        if (blocking_queue_add(&bq1, array_index)) {
             printf("Buffer is full.\n");
-            free(sb);
             break;
         }
+#if (SAMPLES_QUEUE_SIZE & (SAMPLES_QUEUE_SIZE - 1)) == 0 //SAMPLES_QUEUE_SIZEが2の冪乗の場合
+        array_index = (array_index + 1) & (SAMPLES_QUEUE_SIZE - 1);
+#else
+        array_index = (array_index + 1) % SAMPLES_QUEUE_SIZE;
+#endif
     }
 
     // Stop
