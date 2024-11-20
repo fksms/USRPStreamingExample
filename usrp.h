@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 // Queue size (Must be power of two)
-#define SAMPLES_QUEUE_SIZE 32
+#define RX_STREAMER_RECV_QUEUE_SIZE 32
 
 
 // サンプル格納用

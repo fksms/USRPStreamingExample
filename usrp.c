@@ -9,7 +9,9 @@
 #include "usrp.h"
 
 
-// --------------------global--------------------
+extern int running;
+
+// ---------------For USRP Streaming---------------
 extern double freq;
 extern double rate;
 extern double gain;
@@ -17,10 +19,8 @@ extern char *device_args;
 extern size_t channel;
 
 extern sample_buf_t *buffs;
-extern Array_Blocking_Queue_Integer bq1;
-
-extern int running;
-// ----------------------------------------------
+extern Array_Blocking_Queue_Integer abq1;
+// ------------------------------------------------
 
 
 uhd_usrp_handle usrp_setup(void) {
@@ -141,7 +141,7 @@ void *usrp_stream_thread(void *arg) {
     // sizeof(int16_t)  ：1サンプルあたりのサイズ（int16_t）
     // ----------------------------------------
     size_t buf_size = sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t);
-    buffs = (sample_buf_t *)malloc(buf_size * SAMPLES_QUEUE_SIZE);
+    buffs = (sample_buf_t *)malloc(buf_size * RX_STREAMER_RECV_QUEUE_SIZE);
 
     // 配列のインデックス
     int array_index = 0;
@@ -160,14 +160,14 @@ void *usrp_stream_thread(void *arg) {
         buffs[array_index].num_of_samples = num_rx_samps;
 
         // キューへの追加が失敗した場合は解放して終了
-        if (blocking_queue_add(&bq1, array_index)) {
+        if (blocking_queue_add(&abq1, array_index)) {
             printf("Buffer is full.\n");
             break;
         }
-#if (SAMPLES_QUEUE_SIZE & (SAMPLES_QUEUE_SIZE - 1)) == 0 //SAMPLES_QUEUE_SIZEが2の冪乗の場合
-        array_index = (array_index + 1) & (SAMPLES_QUEUE_SIZE - 1);
+#if (RX_STREAMER_RECV_QUEUE_SIZE & (RX_STREAMER_RECV_QUEUE_SIZE - 1)) == 0 // Queue sizeが2の冪乗の場合
+        array_index = (array_index + 1) & (RX_STREAMER_RECV_QUEUE_SIZE - 1);
 #else
-        array_index = (array_index + 1) % SAMPLES_QUEUE_SIZE;
+        array_index = (array_index + 1) % RX_STREAMER_RECV_QUEUE_SIZE;
 #endif
     }
 
@@ -179,9 +179,6 @@ void *usrp_stream_thread(void *arg) {
     error = uhd_rx_streamer_issue_stream_cmd(rx_streamer, &stream_cmd);
     if (error)
         printf("%u\n", error);
-
-    // キュー内の要素（sample_buf_t）を全て取り出して解放
-    // -> main側で実施
 
     // Cleaning up RX streamer
     error = uhd_rx_streamer_free(&rx_streamer);

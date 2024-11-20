@@ -12,15 +12,19 @@
 
 #include "array_blocking_queue_integer.h"
 #include "usrp.h"
+#include "fft.h"
 
 
-// --------------------global--------------------
+// 動作ステータス
+int running = 1;
+
+// ---------------For USRP Streaming---------------
 // Center frequency
 double freq          = 2400e6;
 // Sampling rate
-double rate          = 20e6;
+double rate          = 12.5e6;
 // Gain
-double gain          = 5.0;
+double gain          = 30.0;
 // Device args
 char* device_args    = NULL;
 // Channel
@@ -30,35 +34,13 @@ size_t channel       = 0;
 // サンプルを格納するためのバッファ
 sample_buf_t *buffs;
 // バッファ内のサンプルが格納された位置を格納
-Array_Blocking_Queue_Integer bq1;
+Array_Blocking_Queue_Integer abq1;
+// ------------------------------------------------
 
-
-// 動作ステータス
-int running = 1;
-// ----------------------------------------------
-
-
-void *test_thread(void *arg) {
-
-    int array_index;
-
-    unsigned int i = 0;
-
-    while (running) {
-
-        if (blocking_queue_take(&bq1, &array_index)) {
-            printf("Unknown error.\n");
-            break;
-        }
-
-        printf("%d\t\t%d\t\t%d\t\t%d\n", i, array_index, buffs[array_index].samples[0], buffs[array_index].samples[1]);
-
-        i++;
-    }
-    running = 0;
-
-    return NULL;
-}
+// --------------------For FFT---------------------
+// FFT Size (Must be power of two)
+int fft_size = 1024;
+// ------------------------------------------------
 
 
 void print_help(void)
@@ -127,7 +109,7 @@ int main(int argc, char* argv[])
 
 
     // Init the blocking queue.
-    blocking_queue_init(&bq1, SAMPLES_QUEUE_SIZE);
+    blocking_queue_init(&abq1, RX_STREAMER_RECV_QUEUE_SIZE);
 
     // USRP setup
     usrp = usrp_setup();
@@ -135,51 +117,68 @@ int main(int argc, char* argv[])
 
     // Initialize pthread attributes
     if (pthread_attr_init(&attr)) {
-        printf("init pthread attributes failed\n");
+        printf("Init pthread attributes failed\n");
         return 1;
     }
 
     // Set scheduler policy and priority of pthread
     if (pthread_attr_setschedpolicy(&attr, SCHED_RR)) {
-        printf("pthread setschedpolicy failed\n");
+        printf("Pthread setschedpolicy failed\n");
         return 1;
     }
 
-    param.sched_priority = 127;
+    param.sched_priority = 80;
 
     if (pthread_attr_setschedparam(&attr, &param)) {
-        printf("pthread setschedparam failed\n");
+        printf("Pthread setschedparam failed\n");
         return 1;
     }
 
         // Use scheduling parameters of attr
     if (pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED)) {
-        printf("pthread setinheritsched failed\n");
+        printf("Pthread setinheritsched failed\n");
         return 1;
     }
 
     // Create thread
     if (pthread_create(&test, NULL, test_thread, NULL)) {
-        printf("create pthread failed\n");
+        printf("Create test_thread failed\n");
         return 1;
     }
 
+    // Create thread
     if (pthread_create(&usrp_stream, &attr, usrp_stream_thread, (void *)usrp)) {
-        printf("create pthread failed\n");
+        printf("Create usrp_stream_thread failed\n");
         return 1;
     }
 
-
+    /*
     while (running) {
         pause();
     }
     running = 0;
+    */
+
+    // Join thread
+    if (pthread_join(usrp_stream, NULL)) {
+        printf("Join usrp_stream_thread failed\n");
+        return 1;
+    }
+
+    // Join thread
+    if (pthread_join(test, NULL)) {
+        printf("Join test_thread failed\n");
+        return 1;
+    }
 
     // メモリ解放
     free(buffs);
 
     // Closes the blocking queue.
-    blocking_queue_destroy(&bq1);
+    blocking_queue_destroy(&abq1);
+
+    // Close USRP
+    usrp_close(usrp);
 
     return 0;
 }

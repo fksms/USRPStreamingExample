@@ -17,6 +17,11 @@ set(CMAKE_C_FLAGS_RELEASE "-O3")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+# https://github.com/microsoft/vcpkg/issues/40561
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD)
+endif()
+
 find_package(PkgConfig)
 pkg_check_modules(UHD REQUIRED uhd)
 #find_package(Boost)
@@ -30,13 +35,14 @@ find_package(Boost COMPONENTS system REQUIRED)
 #message("## UHD_LIBRARY_DIRS: ${UHD_LIBRARY_DIRS}")  # 確認
 #message("## UHD_LIBRARIES: ${UHD_LIBRARIES}")  # 確認
 
+message("CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}") # ビルドタイプ確認
 
 include_directories(
     ${Boost_INCLUDE_DIRS}
     ${UHD_INCLUDE_DIRS}
     )
 
-add_executable(${PROJECT_NAME} usrp.c main.c)
+add_executable(${PROJECT_NAME} usrp.c main.c fft.c)
 #add_executable(${PROJECT_NAME} rx_samples_c.c)
 
 #link_directories(${Boost_LIBRARY_DIRS})
