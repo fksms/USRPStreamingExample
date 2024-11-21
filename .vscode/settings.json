@@ -25,6 +25,7 @@
         "sstream": "cpp",
         "stdexcept": "cpp",
         "queue": "cpp",
-        "array_blocking_queue_integer.h": "c"
+        "array_blocking_queue_integer.h": "c",
+        "fftw3.h": "c"
     }
 }

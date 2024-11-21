@@ -8,8 +8,10 @@
 #include "array_blocking_queue_integer.h"
 #include "usrp.h"
 
-
-extern int running;
+// ---------------------Status---------------------
+extern sig_atomic_t running;
+extern pthread_mutex_t mutex;
+// ------------------------------------------------
 
 // ---------------For USRP Streaming---------------
 extern double freq;
@@ -22,9 +24,8 @@ extern sample_buf_t *buffs;
 extern Array_Blocking_Queue_Integer abq1;
 // ------------------------------------------------
 
-
-uhd_usrp_handle usrp_setup(void) {
-    
+uhd_usrp_handle usrp_setup(void)
+{
     // USRP handle
     uhd_usrp_handle usrp;
     uhd_error error;
@@ -46,7 +47,7 @@ uhd_usrp_handle usrp_setup(void) {
     error = uhd_usrp_set_rx_rate(usrp, rate, channel);
     if (error)
         printf("%u\n", error);
-    
+
     // See what rate actually is
     error = uhd_usrp_get_rx_rate(usrp, channel, &rate);
     printf("Actual RX Rate: %f Sps...\n", rate);
@@ -68,7 +69,7 @@ uhd_usrp_handle usrp_setup(void) {
     error = uhd_usrp_set_rx_freq(usrp, &tune_request, channel, &tune_result);
     if (error)
         printf("%u\n", error);
-    
+
     // See what rate actually is
     error = uhd_usrp_get_rx_freq(usrp, channel, &freq);
     printf("Actual RX frequency: %f Hz...\n", freq);
@@ -78,9 +79,8 @@ uhd_usrp_handle usrp_setup(void) {
     return usrp;
 }
 
-
-void *usrp_stream_thread(void *arg) {
-
+void *usrp_stream_thread(void *arg)
+{
     // USRP handle
     uhd_usrp_handle usrp = arg;
     uhd_error error;
@@ -95,14 +95,13 @@ void *usrp_stream_thread(void *arg) {
         .otw_format = "sc16",
         .args = "",
         .channel_list = &channel,
-        .n_channels = 1
-    };
+        .n_channels = 1};
 
     uhd_stream_cmd_t stream_cmd = {
         .stream_mode = UHD_STREAM_MODE_START_CONTINUOUS,
         .stream_now = 1,
     };
-    
+
     // Create RX streamer
     uhd_rx_streamer_handle rx_streamer;
     error = uhd_rx_streamer_make(&rx_streamer);
@@ -120,11 +119,16 @@ void *usrp_stream_thread(void *arg) {
     if (error)
         printf("%u\n", error);
 
+    /*
     // Set up buffer
     error = uhd_rx_streamer_max_num_samps(rx_streamer, &samps_per_buff);
-    printf("Buffer size in samples: %zu\n", samps_per_buff);
     if (error)
         printf("%u\n", error);
+    */
+
+    // Set up buffer
+    samps_per_buff = 1024;
+    printf("Buffer size in samples: %zu\n", samps_per_buff);
 
     // Issue stream command
     error = uhd_rx_streamer_issue_stream_cmd(rx_streamer, &stream_cmd);
@@ -147,20 +151,24 @@ void *usrp_stream_thread(void *arg) {
     int array_index = 0;
 
     // Actual streaming
-    while (running) {
+    while (running)
+    {
+        // ストリームを受信
         buf = buffs[array_index].samples;
         uhd_rx_streamer_recv(rx_streamer, &buf, samps_per_buff, &md, 3.0, false, &num_rx_samps);
-	    uhd_rx_metadata_error_code(md, &error_code);
+        uhd_rx_metadata_error_code(md, &error_code);
 
         // エラー有りの場合は解放して終了
-        if(error_code) {
+        if (error_code)
+        {
             printf("Streaming Error: %d\n", error_code);
             break;
         }
         buffs[array_index].num_of_samples = num_rx_samps;
 
         // キューへの追加が失敗した場合は解放して終了
-        if (blocking_queue_add(&abq1, array_index)) {
+        if (blocking_queue_add(&abq1, array_index))
+        {
             printf("Buffer is full.\n");
             break;
         }
@@ -172,7 +180,9 @@ void *usrp_stream_thread(void *arg) {
     }
 
     // Stop
+    pthread_mutex_lock(&mutex);
     running = 0;
+    pthread_mutex_unlock(&mutex);
 
     // Issue stream command
     stream_cmd.stream_mode = UHD_STREAM_MODE_STOP_CONTINUOUS;
@@ -189,13 +199,12 @@ void *usrp_stream_thread(void *arg) {
     error = uhd_rx_metadata_free(&md);
     if (error)
         printf("%u\n", error);
-    
+
     return NULL;
 }
 
-
-void usrp_close(uhd_usrp_handle usrp) {
-
+void usrp_close(uhd_usrp_handle usrp)
+{
     uhd_error error;
 
     // Cleaning up USRP
