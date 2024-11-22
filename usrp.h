@@ -9,13 +9,13 @@
 #define RX_STREAMER_RECV_QUEUE_SIZE 64
 
 // サンプル格納用
-typedef struct _sample_buf_t
+typedef struct _stream_buf_t
 {
     // 取得したサンプル数
     size_t num_of_samples;
     // 取得したサンプル
     int16_t samples[];
-} sample_buf_t;
+} stream_buf_t;
 
 uhd_usrp_handle usrp_setup(void);
 void *usrp_stream_thread(void *arg);

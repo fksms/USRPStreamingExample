@@ -32,7 +32,7 @@ char *device_args = NULL;
 size_t channel = 0;
 
 // サンプルを格納するためのバッファ
-sample_buf_t *buffs;
+stream_buf_t *stream_buffer;
 // バッファ内のサンプルが格納された位置を格納
 Array_Blocking_Queue_Integer abq1;
 // ------------------------------------------------
@@ -172,7 +172,7 @@ int main(int argc, char *argv[])
     }
 
     // メモリ解放
-    free(buffs);
+    free(stream_buffer);
 
     // Closes the blocking queue.
     blocking_queue_destroy(&abq1);

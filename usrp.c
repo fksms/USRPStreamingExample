@@ -20,7 +20,7 @@ extern double gain;
 extern char *device_args;
 extern size_t channel;
 
-extern sample_buf_t *buffs;
+extern stream_buf_t *stream_buffer;
 extern Array_Blocking_Queue_Integer abq1;
 // ------------------------------------------------
 
@@ -85,8 +85,11 @@ void *usrp_stream_thread(void *arg)
     uhd_usrp_handle usrp = arg;
     uhd_error error;
 
-    size_t samps_per_buff, num_rx_samps;
-    void *buf = NULL;
+    // 取得したいサンプル数と実際に取得したサンプル数
+    size_t num_samps, actual_num_samps;
+    // バッファへのポインタ
+    void *pointer_to_buf = NULL;
+    // エラーコード
     uhd_rx_metadata_error_code_t error_code;
 
     // CPUフォーマットは complex<int16_t> を指定
@@ -109,8 +112,8 @@ void *usrp_stream_thread(void *arg)
         printf("%u\n", error);
 
     // Create RX metadata
-    uhd_rx_metadata_handle md;
-    error = uhd_rx_metadata_make(&md);
+    uhd_rx_metadata_handle rx_metadata;
+    error = uhd_rx_metadata_make(&rx_metadata);
     if (error)
         printf("%u\n", error);
 
@@ -121,14 +124,14 @@ void *usrp_stream_thread(void *arg)
 
     /*
     // Set up buffer
-    error = uhd_rx_streamer_max_num_samps(rx_streamer, &samps_per_buff);
+    error = uhd_rx_streamer_max_num_samps(rx_streamer, &num_samps);
     if (error)
         printf("%u\n", error);
     */
 
-    // Set up buffer
-    samps_per_buff = 1024;
-    printf("Buffer size in samples: %zu\n", samps_per_buff);
+    // 1回で取得するサンプル数（最大は2040？）
+    num_samps = 1024;
+    printf("Number of samples taken at one time: %zu\n", num_samps);
 
     // Issue stream command
     error = uhd_rx_streamer_issue_stream_cmd(rx_streamer, &stream_cmd);
@@ -136,16 +139,19 @@ void *usrp_stream_thread(void *arg)
         printf("%u\n", error);
 
     // ----------------------------------------
-    // バッファあたりの確保するメモリ量
-    // (sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t))
+    // バッファ1要素あたりの確保するメモリ量
+    // (sizeof(size_t) + num_samps * 2 * sizeof(int16_t))
     //
-    // sizeof(size_t)   ：受信したサンプル数を格納する用
-    // samps_per_buff   ：1回で取得するサンプリング数
+    // sizeof(size_t)   ：実際に受信したサンプルの数を格納する用（size_t）
+    // num_samps        ：1回で取得するサンプル数
     // 2                ：I+Q
     // sizeof(int16_t)  ：1サンプルあたりのサイズ（int16_t）
     // ----------------------------------------
-    size_t buf_size = sizeof(size_t) + samps_per_buff * 2 * sizeof(int16_t);
-    buffs = (sample_buf_t *)malloc(buf_size * RX_STREAMER_RECV_QUEUE_SIZE);
+    size_t element_size = sizeof(size_t) + num_samps * 2 * sizeof(int16_t);
+    stream_buffer = (stream_buf_t *)malloc(element_size * RX_STREAMER_RECV_QUEUE_SIZE);
+
+    // タイムアウト時間
+    double timeout = 3.0; //[sec]
 
     // 配列のインデックス
     int array_index = 0;
@@ -153,10 +159,12 @@ void *usrp_stream_thread(void *arg)
     // Actual streaming
     while (running)
     {
+        // バッファへのポインタを設定
+        pointer_to_buf = stream_buffer[array_index].samples;
+
         // ストリームを受信
-        buf = buffs[array_index].samples;
-        uhd_rx_streamer_recv(rx_streamer, &buf, samps_per_buff, &md, 3.0, false, &num_rx_samps);
-        uhd_rx_metadata_error_code(md, &error_code);
+        uhd_rx_streamer_recv(rx_streamer, &pointer_to_buf, num_samps, &rx_metadata, timeout, false, &actual_num_samps);
+        uhd_rx_metadata_error_code(rx_metadata, &error_code);
 
         // エラー有りの場合は解放して終了
         if (error_code)
@@ -164,7 +172,9 @@ void *usrp_stream_thread(void *arg)
             printf("Streaming Error: %d\n", error_code);
             break;
         }
-        buffs[array_index].num_of_samples = num_rx_samps;
+
+        // 実際に取得したサンプルの数を格納
+        stream_buffer[array_index].num_of_samples = actual_num_samps;
 
         // キューへの追加が失敗した場合は解放して終了
         if (blocking_queue_add(&abq1, array_index))
@@ -172,6 +182,8 @@ void *usrp_stream_thread(void *arg)
             printf("Buffer is full.\n");
             break;
         }
+
+        // インデックスをインクリメント
 #if (RX_STREAMER_RECV_QUEUE_SIZE & (RX_STREAMER_RECV_QUEUE_SIZE - 1)) == 0 // Queue sizeが2の冪乗の場合
         array_index = (array_index + 1) & (RX_STREAMER_RECV_QUEUE_SIZE - 1);
 #else
@@ -196,7 +208,7 @@ void *usrp_stream_thread(void *arg)
         printf("%u\n", error);
 
     // Cleaning up RX metadata
-    error = uhd_rx_metadata_free(&md);
+    error = uhd_rx_metadata_free(&rx_metadata);
     if (error)
         printf("%u\n", error);
 

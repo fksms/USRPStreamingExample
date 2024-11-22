@@ -15,7 +15,7 @@ extern pthread_mutex_t mutex;
 // ------------------------------------------------
 
 // --------------From USRP Streaming---------------
-extern sample_buf_t *buffs;
+extern stream_buf_t *stream_buffer;
 extern Array_Blocking_Queue_Integer abq1;
 // ------------------------------------------------
 
@@ -49,8 +49,8 @@ void *fft_thread(void *arg)
         // 入力データは16ビットのため、2^16(=65536)で割っておく
         for (int i = 0; i < fft_size; i++)
         {
-            in[i][0] = (double)buffs[array_index].samples[2 * i + 1] / 65536; // I成分
-            in[i][1] = (double)buffs[array_index].samples[2 * i] / 65536;     // Q成分
+            in[i][0] = (double)stream_buffer[array_index].samples[2 * i + 1] / 65536; // I成分
+            in[i][1] = (double)stream_buffer[array_index].samples[2 * i] / 65536;     // Q成分
         }
 
         // FFTの実行
@@ -58,7 +58,7 @@ void *fft_thread(void *arg)
 
         printf("%d\t\t%lf\t\t%lf\n", i, out[0][0], out[0][1]);
 
-        // printf("%d\t\t%d\t\t%d\t\t%d\n", i, array_index, buffs[array_index].samples[1020], buffs[array_index].samples[1021]);
+        // printf("%d\t\t%d\t\t%d\t\t%d\n", i, array_index, stream_buffer[array_index].samples[1020], stream_buffer[array_index].samples[1021]);
 
         i++;
     }
