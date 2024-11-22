@@ -32,6 +32,11 @@ void *fft_thread(void *arg)
     fftw_complex *in, *out;
     fftw_plan plan;
 
+    // thread parameters
+    // int n_threads = 2;
+    // fftw_init_threads();
+    // fftw_plan_with_nthreads(n_threads);
+
     in = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * fft_size);
     out = (fftw_complex *)fftw_malloc(sizeof(fftw_complex) * fft_size);
     plan = fftw_plan_dft_1d(fft_size, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
@@ -67,6 +72,13 @@ void *fft_thread(void *arg)
     pthread_mutex_lock(&mutex);
     running = 0;
     pthread_mutex_unlock(&mutex);
+
+    // fftw_cleanup_threads();
+
+    // メモリ解放
+    fftw_destroy_plan(plan);
+    fftw_free(in);
+    fftw_free(out);
 
     return NULL;
 }
