@@ -24,7 +24,7 @@ find_package(FFTW3 REQUIRED)
 pkg_check_modules(UHD REQUIRED uhd) # search library with pkg-config and name its results "UHD"
 
 # 実行ファイルを作成
-add_executable(${PROJECT_NAME} main.c usrp.c fft.c)
+add_executable(${PROJECT_NAME} main.c usrp.c fft.c display.c)
 
 # インクルードするディレクトリの設定
 target_include_directories(${PROJECT_NAME} PRIVATE

@@ -13,6 +13,7 @@
 #include "array_blocking_queue_integer.h"
 #include "usrp.h"
 #include "fft.h"
+#include "display.h"
 
 // ---------------------Status---------------------
 volatile sig_atomic_t running = 1;
@@ -31,15 +32,20 @@ char *device_args = NULL;
 // Channel
 size_t channel = 0;
 
-// サンプルを格納するためのバッファ
-stream_buf_t *stream_buffer;
-// バッファ内のサンプルが格納された位置を格納
+// ストリーミングデータを格納するためのバッファ
+stream_data_t *stream_buffer;
+// バッファ内のデータが格納された位置を格納
 Array_Blocking_Queue_Integer abq1;
 // ------------------------------------------------
 
 // --------------------For FFT---------------------
 // FFT Size (Must be power of two)
 int fft_size = 1024;
+
+// FFTデータを格納
+double *fft_data;
+// バッファ内のデータが格納された位置を格納
+Array_Blocking_Queue_Integer abq2;
 // ------------------------------------------------
 
 void print_help(void)
@@ -99,6 +105,7 @@ int main(int argc, char *argv[])
 
     // Init the blocking queue.
     blocking_queue_init(&abq1, RX_STREAMER_RECV_QUEUE_SIZE);
+    blocking_queue_init(&abq2, FFT_DATA_QUEUE_SIZE);
 
     // USRP handle
     uhd_usrp_handle usrp = NULL;
@@ -142,11 +149,19 @@ int main(int argc, char *argv[])
 
     pthread_t usrpStreamThread;
     pthread_t fftThread;
+    pthread_t displayThread;
+
+    // Create Display thread
+    if (pthread_create(&displayThread, NULL, display_thread, NULL))
+    {
+        printf("Create display_thread failed\n");
+        return 1;
+    }
 
     // Create FFT thread
     if (pthread_create(&fftThread, NULL, fft_thread, NULL))
     {
-        printf("Create test_thread failed\n");
+        printf("Create fft_thread failed\n");
         return 1;
     }
 
@@ -160,7 +175,7 @@ int main(int argc, char *argv[])
     // Join USRP stream thread
     if (pthread_join(fftThread, NULL))
     {
-        printf("Join test_thread failed\n");
+        printf("Join fft_thread failed\n");
         return 1;
     }
 
@@ -171,11 +186,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // メモリ解放
-    free(stream_buffer);
+    // Join Display thread
+    if (pthread_join(displayThread, NULL))
+    {
+        printf("Join display_thread failed\n");
+        return 1;
+    }
 
     // Closes the blocking queue.
     blocking_queue_destroy(&abq1);
+    blocking_queue_destroy(&abq2);
 
     // Close USRP
     usrp_close(usrp);

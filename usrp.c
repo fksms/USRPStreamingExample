@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <pthread.h>
 
 #include <uhd.h>
 
@@ -20,7 +21,7 @@ extern double gain;
 extern char *device_args;
 extern size_t channel;
 
-extern stream_buf_t *stream_buffer;
+extern stream_data_t *stream_buffer;
 extern Array_Blocking_Queue_Integer abq1;
 // ------------------------------------------------
 
@@ -145,22 +146,22 @@ void *usrp_stream_thread(void *arg)
     // sizeof(size_t)   ：実際に受信したサンプルの数を格納する用（size_t）
     // num_samps        ：1回で取得するサンプル数
     // 2                ：I+Q
-    // sizeof(int16_t)  ：1サンプルあたりのサイズ（int16_t）
+    // sizeof(int16_t)  ：1サンプルあたりのデータサイズ（int16_t）
     // ----------------------------------------
     size_t element_size = sizeof(size_t) + num_samps * 2 * sizeof(int16_t);
-    stream_buffer = (stream_buf_t *)malloc(element_size * RX_STREAMER_RECV_QUEUE_SIZE);
+    stream_buffer = (stream_data_t *)malloc(element_size * RX_STREAMER_RECV_QUEUE_SIZE);
 
     // タイムアウト時間
     double timeout = 3.0; //[sec]
 
-    // 配列のインデックス
-    int array_index = 0;
+    // Array_Blocking_Queueの何番目に格納したかを示すインデックス
+    int abq1_index = 0;
 
     // Actual streaming
     while (running)
     {
         // バッファへのポインタを設定
-        pointer_to_buf = stream_buffer[array_index].samples;
+        pointer_to_buf = stream_buffer[abq1_index].samples;
 
         // ストリームを受信
         uhd_rx_streamer_recv(rx_streamer, &pointer_to_buf, num_samps, &rx_metadata, timeout, false, &actual_num_samps);
@@ -169,25 +170,25 @@ void *usrp_stream_thread(void *arg)
         // エラー有りの場合は解放して終了
         if (error_code)
         {
-            printf("Streaming Error: %d\n", error_code);
+            printf("Streaming error: %d\n", error_code);
             break;
         }
 
         // 実際に取得したサンプルの数を格納
-        stream_buffer[array_index].num_of_samples = actual_num_samps;
+        stream_buffer[abq1_index].num_of_samples = actual_num_samps;
 
         // キューへの追加が失敗した場合は解放して終了
-        if (blocking_queue_add(&abq1, array_index))
+        if (blocking_queue_add(&abq1, abq1_index))
         {
-            printf("Buffer is full.\n");
+            printf("Streame buffer is full.\n");
             break;
         }
 
         // インデックスをインクリメント
 #if (RX_STREAMER_RECV_QUEUE_SIZE & (RX_STREAMER_RECV_QUEUE_SIZE - 1)) == 0 // Queue sizeが2の冪乗の場合
-        array_index = (array_index + 1) & (RX_STREAMER_RECV_QUEUE_SIZE - 1);
+        abq1_index = (abq1_index + 1) & (RX_STREAMER_RECV_QUEUE_SIZE - 1);
 #else
-        array_index = (array_index + 1) % RX_STREAMER_RECV_QUEUE_SIZE;
+        abq1_index = (abq1_index + 1) % RX_STREAMER_RECV_QUEUE_SIZE;
 #endif
     }
 
@@ -211,6 +212,9 @@ void *usrp_stream_thread(void *arg)
     error = uhd_rx_metadata_free(&rx_metadata);
     if (error)
         printf("%u\n", error);
+
+    // メモリ解放
+    free(stream_buffer);
 
     return NULL;
 }
