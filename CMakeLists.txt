@@ -20,8 +20,9 @@ find_package(Threads REQUIRED)
 
 # パッケージの確認
 find_package(PkgConfig REQUIRED)
-find_package(FFTW3 REQUIRED)
-pkg_check_modules(UHD REQUIRED uhd) # search library with pkg-config and name its results "UHD"
+find_package(UHD REQUIRED)
+find_package(FFTW REQUIRED)
+find_package(Liquid REQUIRED)
 
 # 実行ファイルを作成
 add_executable(${PROJECT_NAME} main.c usrp.c fft.c display.c)
@@ -29,19 +30,15 @@ add_executable(${PROJECT_NAME} main.c usrp.c fft.c display.c)
 # インクルードするディレクトリの設定
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${UHD_INCLUDE_DIRS}
-    ${FFTW3_INCLUDE_DIR}
-)
-
-# リンクするライブラリのディレクトリの設定
-target_link_directories(${PROJECT_NAME} PRIVATE
-    ${UHD_LIBRARY_DIRS}
-    ${FFTW3_LIBRARY_DIRS}
+    ${FFTW_INCLUDE_DIRS}
+    ${LIQUID_INCLUDE_DIRS}
 )
 
 # リンクするライブラリの設定
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Threads::Threads
-    uhd
-    fftw3
-    fftw3_threads
+    ${UHD_LIBRARIES}
+    #${FFTW_LIBRARIES}
+    ${FFTW_DOUBLE_LIB} # FFTWのライブラリはdoubleのみ使用
+    ${LIQUID_LIBRARIES}
 )
