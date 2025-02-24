@@ -24,7 +24,7 @@ pthread_mutex_t mutex;
 // Center frequency
 double freq = 2400e6;
 // Sampling rate
-double rate = 12.5e6;
+double rate = 10e6;
 // Gain
 double gain = 30.0;
 // Device args
@@ -104,14 +104,48 @@ int main(int argc, char *argv[])
         device_args = strdup("");
 
     // Init the blocking queue.
-    blocking_queue_init(&abq1, RX_STREAMER_RECV_QUEUE_SIZE);
-    blocking_queue_init(&abq2, FFT_DATA_QUEUE_SIZE);
+    if (blocking_queue_init(&abq1, RX_STREAMER_RECV_QUEUE_SIZE))
+    {
+        printf("Init blocking queue failed\n");
+        return 1;
+    }
+
+    if (blocking_queue_init(&abq2, FFT_DATA_QUEUE_SIZE))
+    {
+        printf("Init blocking queue failed\n");
+        return 1;
+    }
+
+    // Init mutex
+    if (pthread_mutex_init(&mutex, NULL))
+    {
+        printf("Init mutex failed\n");
+        return 1;
+    }
 
     // USRP handle
-    uhd_usrp_handle usrp = NULL;
+    uhd_usrp_handle usrp;
 
-    // USRP setup
-    usrp = usrp_setup();
+    // Setup USRP
+    if (usrp_setup(&usrp))
+    {
+        printf("Setup USRP failed\n");
+        return 1;
+    }
+
+    // USRP RX handle
+    uhd_usrp_rx_handle usrp_rx = {
+        .usrp = usrp,
+        .rx_streamer = NULL,
+        .rx_metadata = NULL,
+    };
+
+    // Setup USRP RX
+    if (usrp_rx_setup(&usrp_rx))
+    {
+        printf("Setup USRP RX failed\n");
+        return 1;
+    }
 
     // -----------------Setting pthread attributes-----------------
     pthread_attr_t attr;
@@ -166,7 +200,7 @@ int main(int argc, char *argv[])
     }
 
     // Create USRP stream thread
-    if (pthread_create(&usrpStreamThread, &attr, usrp_stream_thread, (void *)usrp))
+    if (pthread_create(&usrpStreamThread, &attr, usrp_stream_thread, (void *)&usrp_rx))
     {
         printf("Create usrp_stream_thread failed\n");
         return 1;
@@ -197,8 +231,26 @@ int main(int argc, char *argv[])
     blocking_queue_destroy(&abq1);
     blocking_queue_destroy(&abq2);
 
+    // Destroy mutex
+    if (pthread_mutex_destroy(&mutex))
+    {
+        printf("Destroy mutex failed\n");
+        return 1;
+    }
+
+    // Close USRP RX
+    if (usrp_rx_close(&usrp_rx))
+    {
+        printf("Close USRP RX failed\n");
+        return 1;
+    }
+
     // Close USRP
-    usrp_close(usrp);
+    if (usrp_close(usrp))
+    {
+        printf("Close USRP failed\n");
+        return 1;
+    }
 
     return 0;
 }

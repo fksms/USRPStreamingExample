@@ -25,10 +25,28 @@ extern stream_data_t *stream_buffer;
 extern Array_Blocking_Queue_Integer abq1;
 // ------------------------------------------------
 
-uhd_usrp_handle usrp_setup(void)
+int usrp_setup(uhd_usrp_handle *usrp)
+{
+    // UHD error codes
+    uhd_error error;
+
+    // Create USRP
+    error = uhd_usrp_make(usrp, device_args);
+    if (error)
+    {
+        printf("%u\n", error);
+        return error;
+    }
+
+    return 0;
+}
+
+int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
 {
     // USRP handle
-    uhd_usrp_handle usrp;
+    uhd_usrp_handle usrp = usrp_rx->usrp;
+
+    // UHD error codes
     uhd_error error;
 
     // Create other necessary structs
@@ -39,61 +57,58 @@ uhd_usrp_handle usrp_setup(void)
     };
     uhd_tune_result_t tune_result;
 
-    // Create USRP
-    error = uhd_usrp_make(&usrp, device_args);
-    if (error)
-        printf("%u\n", error);
-
     // Set rate
     error = uhd_usrp_set_rx_rate(usrp, rate, channel);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
 
     // See what rate actually is
     error = uhd_usrp_get_rx_rate(usrp, channel, &rate);
     printf("Actual RX Rate: %f Sps...\n", rate);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
 
     // Set gain
     error = uhd_usrp_set_rx_gain(usrp, gain, channel, "");
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
 
     // See what rate actually is
     error = uhd_usrp_get_rx_gain(usrp, channel, "", &gain);
     printf("Actual RX Gain: %f dB...\n", gain);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
 
     // Set frequency
     error = uhd_usrp_set_rx_freq(usrp, &tune_request, channel, &tune_result);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
 
     // See what rate actually is
     error = uhd_usrp_get_rx_freq(usrp, channel, &freq);
     printf("Actual RX frequency: %f Hz...\n", freq);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
 
-    return usrp;
-}
-
-void *usrp_stream_thread(void *arg)
-{
-    // USRP handle
-    uhd_usrp_handle usrp = arg;
-    uhd_error error;
-
-    // 取得したいサンプル数と実際に取得したサンプル数
-    size_t num_samps, actual_num_samps;
-    // バッファへのポインタ
-    void *pointer_to_buf = NULL;
-    // エラーコード
-    uhd_rx_metadata_error_code_t error_code;
-
-    // CPUフォーマットは complex<int16_t> を指定
+    // Specify complex<int16_t> as the CPU format.
     uhd_stream_args_t stream_args = {
         .cpu_format = "sc16",
         .otw_format = "sc16",
@@ -101,43 +116,61 @@ void *usrp_stream_thread(void *arg)
         .channel_list = &channel,
         .n_channels = 1};
 
+    // Define how device streams to host
     uhd_stream_cmd_t stream_cmd = {
         .stream_mode = UHD_STREAM_MODE_START_CONTINUOUS,
         .stream_now = 1,
     };
 
     // Create RX streamer
-    uhd_rx_streamer_handle rx_streamer;
-    error = uhd_rx_streamer_make(&rx_streamer);
+    error = uhd_rx_streamer_make(&usrp_rx->rx_streamer);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
 
     // Create RX metadata
-    uhd_rx_metadata_handle rx_metadata;
-    error = uhd_rx_metadata_make(&rx_metadata);
+    error = uhd_rx_metadata_make(&usrp_rx->rx_metadata);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
 
     // Set up streamer
-    error = uhd_usrp_get_rx_stream(usrp, &stream_args, rx_streamer);
+    error = uhd_usrp_get_rx_stream(usrp, &stream_args, usrp_rx->rx_streamer);
     if (error)
+    {
         printf("%u\n", error);
-
-    /*
-    // Set up buffer
-    error = uhd_rx_streamer_max_num_samps(rx_streamer, &num_samps);
-    if (error)
-        printf("%u\n", error);
-    */
-
-    // 1回で取得するサンプル数（最大は2040？）
-    num_samps = 1024;
-    printf("Number of samples taken at one time: %zu\n", num_samps);
+        return error;
+    }
 
     // Issue stream command
-    error = uhd_rx_streamer_issue_stream_cmd(rx_streamer, &stream_cmd);
+    error = uhd_rx_streamer_issue_stream_cmd(usrp_rx->rx_streamer, &stream_cmd);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
+
+    return 0;
+}
+
+void *usrp_stream_thread(void *arg)
+{
+    // USRP RX handle
+    uhd_usrp_rx_handle *usrp_rx = arg;
+
+    // Error condition on a receive call
+    uhd_rx_metadata_error_code_t error_code;
+
+    // 取得したいサンプル数と実際に取得したサンプル数
+    size_t num_samps = 1024;
+    size_t actual_num_samps;
+
+    // バッファへのポインタ
+    void *pointer_to_buf = NULL;
 
     // ----------------------------------------
     // バッファ1要素あたりの確保するメモリ量
@@ -164,8 +197,8 @@ void *usrp_stream_thread(void *arg)
         pointer_to_buf = stream_buffer[abq1_index].samples;
 
         // ストリームを受信
-        uhd_rx_streamer_recv(rx_streamer, &pointer_to_buf, num_samps, &rx_metadata, timeout, false, &actual_num_samps);
-        uhd_rx_metadata_error_code(rx_metadata, &error_code);
+        uhd_rx_streamer_recv(usrp_rx->rx_streamer, &pointer_to_buf, num_samps, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
+        uhd_rx_metadata_error_code(usrp_rx->rx_metadata, &error_code);
 
         // エラー有りの場合は解放して終了
         if (error_code)
@@ -197,34 +230,62 @@ void *usrp_stream_thread(void *arg)
     running = 0;
     pthread_mutex_unlock(&mutex);
 
-    // Issue stream command
-    stream_cmd.stream_mode = UHD_STREAM_MODE_STOP_CONTINUOUS;
-    error = uhd_rx_streamer_issue_stream_cmd(rx_streamer, &stream_cmd);
-    if (error)
-        printf("%u\n", error);
-
-    // Cleaning up RX streamer
-    error = uhd_rx_streamer_free(&rx_streamer);
-    if (error)
-        printf("%u\n", error);
-
-    // Cleaning up RX metadata
-    error = uhd_rx_metadata_free(&rx_metadata);
-    if (error)
-        printf("%u\n", error);
-
-    // メモリ解放
+    // Memory release
     free(stream_buffer);
 
     return NULL;
 }
 
-void usrp_close(uhd_usrp_handle usrp)
+int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx)
 {
+    // UHD error codes
+    uhd_error error;
+
+    // Define how device streams to host
+    uhd_stream_cmd_t stream_cmd = {
+        .stream_mode = UHD_STREAM_MODE_STOP_CONTINUOUS,
+        .stream_now = 1,
+    };
+
+    // Issue stream command
+    error = uhd_rx_streamer_issue_stream_cmd(usrp_rx->rx_streamer, &stream_cmd);
+    if (error)
+    {
+        printf("%u\n", error);
+        return error;
+    }
+
+    // Cleaning up RX streamer
+    error = uhd_rx_streamer_free(&usrp_rx->rx_streamer);
+    if (error)
+    {
+        printf("%u\n", error);
+        return error;
+    }
+
+    // Cleaning up RX metadata
+    error = uhd_rx_metadata_free(&usrp_rx->rx_metadata);
+    if (error)
+    {
+        printf("%u\n", error);
+        return error;
+    }
+
+    return 0;
+}
+
+int usrp_close(uhd_usrp_handle usrp)
+{
+    // UHD error codes
     uhd_error error;
 
     // Cleaning up USRP
     error = uhd_usrp_free(&usrp);
     if (error)
+    {
         printf("%u\n", error);
+        return error;
+    }
+
+    return 0;
 }
