@@ -25,7 +25,7 @@ extern Array_Blocking_Queue_Integer abq1;
 
 int socket_setup(socket_handle *sock)
 {
-    // UDPソケットの作成
+    // Create socket
     if ((sock->sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
         perror("Socket creation failed\n");
@@ -65,7 +65,7 @@ void *udp_send_thread(void *arg)
             break;
         }
 
-        // ストリームデータを送信
+        // Send stream data
         if (sendto(sock->sockfd, stream_buffer[abq1_index].samples, NUM_SAMPS_PER_ONCE * 2 * sizeof(int16_t), 0, (struct sockaddr *)&sock->server_addr, sizeof(sock->server_addr)) < 0)
         {
             perror("UDP send failed\n");
@@ -86,7 +86,7 @@ void *udp_send_thread(void *arg)
 
 int socket_close(socket_handle sock)
 {
-    // ソケットをクローズ
+    // Close socket
     close(sock.sockfd);
 
     return 0;
