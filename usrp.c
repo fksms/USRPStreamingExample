@@ -166,7 +166,7 @@ void *usrp_stream_thread(void *arg)
     uhd_rx_metadata_error_code_t error_code;
 
     // 取得したいサンプル数と実際に取得したサンプル数
-    size_t num_samps = 1024;
+    size_t num_samps = NUM_SAMPS_PER_ONCE;
     size_t actual_num_samps;
 
     // バッファへのポインタ

@@ -25,7 +25,7 @@ find_package(FFTW REQUIRED)
 find_package(Liquid REQUIRED)
 
 # 実行ファイルを作成
-add_executable(${PROJECT_NAME} main.c usrp.c fft.c display.c)
+add_executable(${PROJECT_NAME} main.c usrp.c udp_send.c)
 
 # インクルードするディレクトリの設定
 target_include_directories(${PROJECT_NAME} PRIVATE

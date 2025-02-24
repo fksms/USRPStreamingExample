@@ -12,8 +12,9 @@
 
 #include "array_blocking_queue_integer.h"
 #include "usrp.h"
-#include "fft.h"
-#include "display.h"
+// #include "fft.h"
+#include "udp_send.h"
+// #include "display.h"
 
 // ---------------------Status---------------------
 volatile sig_atomic_t running = 1;
@@ -22,7 +23,7 @@ pthread_mutex_t mutex;
 
 // ---------------For USRP Streaming---------------
 // Center frequency
-double freq = 2400e6;
+double freq = 925e6;
 // Sampling rate
 double rate = 10e6;
 // Gain
@@ -39,6 +40,7 @@ Array_Blocking_Queue_Integer abq1;
 // ------------------------------------------------
 
 // --------------------For FFT---------------------
+/*
 // FFT Size (Must be power of two)
 int fft_size = 1024;
 
@@ -46,6 +48,7 @@ int fft_size = 1024;
 double *fft_data;
 // バッファ内のデータが格納された位置を格納
 Array_Blocking_Queue_Integer abq2;
+*/
 // ------------------------------------------------
 
 void print_help(void)
@@ -107,20 +110,22 @@ int main(int argc, char *argv[])
     if (blocking_queue_init(&abq1, RX_STREAMER_RECV_QUEUE_SIZE))
     {
         printf("Init blocking queue failed\n");
-        return 1;
+        return -1;
     }
 
+    /*
     if (blocking_queue_init(&abq2, FFT_DATA_QUEUE_SIZE))
     {
         printf("Init blocking queue failed\n");
-        return 1;
+        return -1;
     }
+    */
 
     // Init mutex
     if (pthread_mutex_init(&mutex, NULL))
     {
         printf("Init mutex failed\n");
-        return 1;
+        return -1;
     }
 
     // USRP handle
@@ -130,7 +135,7 @@ int main(int argc, char *argv[])
     if (usrp_setup(&usrp))
     {
         printf("Setup USRP failed\n");
-        return 1;
+        return -1;
     }
 
     // USRP RX handle
@@ -144,7 +149,16 @@ int main(int argc, char *argv[])
     if (usrp_rx_setup(&usrp_rx))
     {
         printf("Setup USRP RX failed\n");
-        return 1;
+        return -1;
+    }
+
+    // Socket handle
+    socket_handle sock;
+
+    if (socket_setup(&sock))
+    {
+        printf("Setup socket failed\n");
+        return -1;
     }
 
     // -----------------Setting pthread attributes-----------------
@@ -155,14 +169,14 @@ int main(int argc, char *argv[])
     if (pthread_attr_init(&attr))
     {
         printf("Init pthread attributes failed\n");
-        return 1;
+        return -1;
     }
 
     // Set scheduler policy and priority of pthread
     if (pthread_attr_setschedpolicy(&attr, SCHED_FIFO))
     {
         printf("Pthread setschedpolicy failed\n");
-        return 1;
+        return -1;
     }
 
     param.sched_priority = 99;
@@ -170,86 +184,116 @@ int main(int argc, char *argv[])
     if (pthread_attr_setschedparam(&attr, &param))
     {
         printf("Pthread setschedparam failed\n");
-        return 1;
+        return -1;
     }
 
     // Use scheduling parameters of attr
     if (pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED))
     {
         printf("Pthread setinheritsched failed\n");
-        return 1;
+        return -1;
     }
     // ------------------------------------------------------------
 
     pthread_t usrpStreamThread;
-    pthread_t fftThread;
-    pthread_t displayThread;
+    // pthread_t fftThread;
+    pthread_t udpSendThread;
+    // pthread_t displayThread;
 
+    /*
     // Create Display thread
     if (pthread_create(&displayThread, NULL, display_thread, NULL))
     {
         printf("Create display_thread failed\n");
-        return 1;
+        return -1;
+    }
+    */
+
+    // Create UDP send thread
+    if (pthread_create(&udpSendThread, NULL, udp_send_thread, (void *)&sock))
+    {
+        printf("Create udp_send_thread failed\n");
+        return -1;
     }
 
+    /*
     // Create FFT thread
     if (pthread_create(&fftThread, NULL, fft_thread, NULL))
     {
         printf("Create fft_thread failed\n");
-        return 1;
+        return -1;
     }
+    */
 
     // Create USRP stream thread
     if (pthread_create(&usrpStreamThread, &attr, usrp_stream_thread, (void *)&usrp_rx))
     {
         printf("Create usrp_stream_thread failed\n");
-        return 1;
+        return -1;
     }
 
     // Join USRP stream thread
-    if (pthread_join(fftThread, NULL))
-    {
-        printf("Join fft_thread failed\n");
-        return 1;
-    }
-
-    // Join FFT thread
     if (pthread_join(usrpStreamThread, NULL))
     {
         printf("Join usrp_stream_thread failed\n");
-        return 1;
+        return -1;
     }
 
+    /*
+    // Join FFT thread
+    if (pthread_join(fftThread, NULL))
+    {
+        printf("Join fft_thread failed\n");
+        return -1;
+    }
+    */
+
+    // Join UDP send thread
+    if (pthread_join(udpSendThread, NULL))
+    {
+        printf("Join udp_send_thread failed\n");
+        return -1;
+    }
+
+    /*
     // Join Display thread
     if (pthread_join(displayThread, NULL))
     {
         printf("Join display_thread failed\n");
-        return 1;
+        return -1;
     }
+    */
 
     // Closes the blocking queue.
     blocking_queue_destroy(&abq1);
-    blocking_queue_destroy(&abq2);
+    // blocking_queue_destroy(&abq2);
 
     // Destroy mutex
     if (pthread_mutex_destroy(&mutex))
     {
         printf("Destroy mutex failed\n");
-        return 1;
+        return -1;
+    }
+
+    // Close socket
+    if (socket_close(sock))
+    {
+        printf("Close socket failed\n");
+        return -1;
     }
 
     // Close USRP RX
     if (usrp_rx_close(&usrp_rx))
     {
         printf("Close USRP RX failed\n");
-        return 1;
+        return -1;
     }
 
     // Close USRP
     if (usrp_close(usrp))
     {
         printf("Close USRP failed\n");
-        return 1;
+        return -1;
     }
 
     return 0;

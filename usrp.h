@@ -8,6 +8,9 @@
 // Queue size (Must be power of two)
 #define RX_STREAMER_RECV_QUEUE_SIZE 64
 
+// Number of samples per once
+#define NUM_SAMPS_PER_ONCE 1024
+
 // USRP RX handle
 typedef struct _uhd_usrp_rx_handle
 {
