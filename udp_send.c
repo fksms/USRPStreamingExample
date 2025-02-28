@@ -17,7 +17,7 @@ extern pthread_mutex_t mutex;
 // ------------------------------------------------
 
 // --------------From USRP Streaming---------------
-extern double rate;
+extern size_t num_samps_per_once;
 
 extern stream_data_t *stream_buffer;
 extern Array_Blocking_Queue_Integer abq1;
@@ -66,7 +66,7 @@ void *udp_send_thread(void *arg)
         }
 
         // Send stream data
-        if (sendto(sock->sockfd, stream_buffer[abq1_index].samples, NUM_SAMPS_PER_ONCE * 2 * sizeof(int16_t), 0, (struct sockaddr *)&sock->server_addr, sizeof(sock->server_addr)) < 0)
+        if (sendto(sock->sockfd, stream_buffer[abq1_index].samples, num_samps_per_once * 2 * sizeof(int16_t), 0, (struct sockaddr *)&sock->server_addr, sizeof(sock->server_addr)) < 0)
         {
             perror("UDP send failed\n");
             break;

@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules" ${CMAKE_MODULE_PATH})
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-common -Wall -Wextra -Wno-unused-parameter -std=c99 -Werror=implicit-function-declaration")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-common -Wall -Wextra -Wno-unused-parameter -std=c99 -Werror=implicit-function-declaration -Wno-deprecated-declarations")
 
 set(CMAKE_C_FLAGS_DEBUG "-ggdb3 -g3 -O0 -fsanitize=address")
 set(CMAKE_C_FLAGS_MINSIZEREL "-Os -fsanitize=address")
@@ -25,7 +25,9 @@ find_package(FFTW REQUIRED)
 find_package(Liquid REQUIRED)
 
 # 実行ファイルを作成
-add_executable(${PROJECT_NAME} main.c usrp.c udp_send.c)
+#add_executable(${PROJECT_NAME} main.c usrp.c udp_send.c)
+#add_executable(${PROJECT_NAME} main.c usrp.c fft.c take_queue.c)
+add_executable(${PROJECT_NAME} main.c usrp.c pfbch.c take_queue.c)
 
 # インクルードするディレクトリの設定
 target_include_directories(${PROJECT_NAME} PRIVATE

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <pthread.h>
+#include <complex.h>
 
 #include "array_blocking_queue_integer.h"
 
@@ -12,13 +13,20 @@ extern pthread_mutex_t mutex;
 // ------------------------------------------------
 
 // --------------------From FFT--------------------
+/*
 extern int fft_size;
 
 extern double *fft_data;
 extern Array_Blocking_Queue_Integer abq2;
+*/
 // ------------------------------------------------
 
-void *display_thread(void *arg)
+// -----------From Polyphase Channelizer-----------
+extern float complex *channelizer_output;
+extern Array_Blocking_Queue_Integer abq2;
+// ------------------------------------------------
+
+void *take_queue_thread(void *arg)
 {
     unsigned int i = 0;
 
@@ -34,7 +42,9 @@ void *display_thread(void *arg)
             break;
         }
 
-        printf("%d\t\t%lf\n", i, fft_data[abq2_index * fft_size + 1]);
+        // printf("%d\t\t%lf\n", i, fft_data[abq2_index * fft_size + 1]);
+
+        printf("%d\n", i);
 
         i++;
     }

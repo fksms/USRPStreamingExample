@@ -20,6 +20,7 @@ extern double rate;
 extern double gain;
 extern char *device_args;
 extern size_t channel;
+extern size_t num_samps_per_once;
 
 extern stream_data_t *stream_buffer;
 extern Array_Blocking_Queue_Integer abq1;
@@ -154,6 +155,21 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
         return error;
     }
 
+    // Allocate a buffer for streaming
+    //
+    // ----------------------------------------
+    // バッファ1要素あたりの確保するメモリ量
+    // (sizeof(size_t) + num_samps_per_once * 2 * sizeof(int16_t))
+    //
+    // sizeof(size_t)       ：実際に受信したサンプルの数を格納する用（size_t）
+    // num_samps_per_once   ：1回で取得するサンプル数
+    // 2                    ：I+Q
+    // sizeof(int16_t)      ：1サンプルあたりのデータサイズ（int16_t）
+    // ----------------------------------------
+    //
+    size_t element_size = sizeof(size_t) + num_samps_per_once * 2 * sizeof(int16_t);
+    stream_buffer = (stream_data_t *)malloc(element_size * RX_STREAMER_RECV_QUEUE_SIZE);
+
     return 0;
 }
 
@@ -165,24 +181,11 @@ void *usrp_stream_thread(void *arg)
     // Error condition on a receive call
     uhd_rx_metadata_error_code_t error_code;
 
-    // 取得したいサンプル数と実際に取得したサンプル数
-    size_t num_samps = NUM_SAMPS_PER_ONCE;
+    // 実際に取得したサンプル数
     size_t actual_num_samps;
 
     // バッファへのポインタ
     void *pointer_to_buf = NULL;
-
-    // ----------------------------------------
-    // バッファ1要素あたりの確保するメモリ量
-    // (sizeof(size_t) + num_samps * 2 * sizeof(int16_t))
-    //
-    // sizeof(size_t)   ：実際に受信したサンプルの数を格納する用（size_t）
-    // num_samps        ：1回で取得するサンプル数
-    // 2                ：I+Q
-    // sizeof(int16_t)  ：1サンプルあたりのデータサイズ（int16_t）
-    // ----------------------------------------
-    size_t element_size = sizeof(size_t) + num_samps * 2 * sizeof(int16_t);
-    stream_buffer = (stream_data_t *)malloc(element_size * RX_STREAMER_RECV_QUEUE_SIZE);
 
     // タイムアウト時間
     double timeout = 3.0; //[sec]
@@ -197,14 +200,19 @@ void *usrp_stream_thread(void *arg)
         pointer_to_buf = stream_buffer[abq1_index].samples;
 
         // ストリームを受信
-        uhd_rx_streamer_recv(usrp_rx->rx_streamer, &pointer_to_buf, num_samps, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
+        uhd_rx_streamer_recv(usrp_rx->rx_streamer, &pointer_to_buf, num_samps_per_once, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
         uhd_rx_metadata_error_code(usrp_rx->rx_metadata, &error_code);
 
-        // エラー有りの場合は解放して終了
+        // エラー有りの場合
         if (error_code)
         {
+            // エラー有りの場合は解放して終了
+            // printf("Streaming error: %d\n", error_code);
+            // break;
+
+            // エラー有りの場合はContinueする
             printf("Streaming error: %d\n", error_code);
-            break;
+            continue;
         }
 
         // 実際に取得したサンプルの数を格納
@@ -230,14 +238,14 @@ void *usrp_stream_thread(void *arg)
     running = 0;
     pthread_mutex_unlock(&mutex);
 
-    // Memory release
-    free(stream_buffer);
-
     return NULL;
 }
 
 int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx)
 {
+    // Memory release
+    free(stream_buffer);
+
     // UHD error codes
     uhd_error error;
 
