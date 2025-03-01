@@ -16,7 +16,7 @@
 #include "usrp.h"
 // #include "fft.h"
 #include "pfbch.h"
-// #include "udp_send.h"
+#include "udp_send.h"
 #include "take_queue.h"
 
 // ---------------------Status---------------------
@@ -26,7 +26,7 @@ pthread_mutex_t mutex;
 
 // ---------------For USRP Streaming---------------
 // Center frequency
-double freq = 924.3e6;
+double freq = 2476e6;
 // Sampling rate
 double rate = 10e6;
 // Gain
@@ -36,7 +36,7 @@ char *device_args = NULL;
 // Channel
 size_t channel = 0;
 // Number of samples per once
-size_t num_samps_per_once = 1024;
+size_t num_samps_per_once = 1000;
 
 // ストリーミングデータを格納するためのバッファ
 stream_data_t *stream_buffer;
@@ -58,7 +58,7 @@ Array_Blocking_Queue_Integer abq2;
 
 // ------------For Polyphase Channelizer-----------
 // Number of channels
-unsigned int num_channels = 8;
+unsigned int num_channels = 5;
 // Filter delay
 unsigned int delay = 4;
 // Stop-band attenuation
@@ -204,7 +204,6 @@ int main(int argc, char *argv[])
     }
     */
 
-    /*
     // Socket handle
     socket_handle sock;
 
@@ -214,7 +213,6 @@ int main(int argc, char *argv[])
         printf("Setup socket failed\n");
         return -1;
     }
-    */
     // ------------------------------------------------------------
 
     // -----------------Setting pthread attributes-----------------
@@ -255,24 +253,24 @@ int main(int argc, char *argv[])
     pthread_t usrpStreamThread;
     pthread_t channelizerThread;
     // pthread_t fftThread;
-    // pthread_t udpSendThread;
-    pthread_t takeQueueThread;
+    pthread_t udpSendThread;
+    // pthread_t takeQueueThread;
 
+    /*
     // Create Take queue thread
     if (pthread_create(&takeQueueThread, NULL, take_queue_thread, NULL))
     {
         printf("Create take_queue_thread failed\n");
         return -1;
     }
+    */
 
-    /*
     // Create UDP send thread
     if (pthread_create(&udpSendThread, NULL, udp_send_thread, (void *)&sock))
     {
         printf("Create udp_send_thread failed\n");
         return -1;
     }
-    */
 
     /*
     // Create FFT thread
@@ -322,32 +320,30 @@ int main(int argc, char *argv[])
     }
     */
 
-    /*
     // Join UDP send thread
     if (pthread_join(udpSendThread, NULL))
     {
         printf("Join udp_send_thread failed\n");
         return -1;
     }
-    */
 
+    /*
     // Join Take queue thread
     if (pthread_join(takeQueueThread, NULL))
     {
         printf("Join take_queue_thread failed\n");
         return -1;
     }
+    */
     // ------------------------------------------------------------
 
     // ----------------------------Close---------------------------
-    /*
     // Close socket
     if (socket_close(sock))
     {
         printf("Close socket failed\n");
         return -1;
     }
-    */
 
     /*
     // Close FFT

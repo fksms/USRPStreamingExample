@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <complex.h>
 
 #include "array_blocking_queue_integer.h"
 #include "usrp.h"
@@ -19,8 +20,17 @@ extern pthread_mutex_t mutex;
 // --------------From USRP Streaming---------------
 extern size_t num_samps_per_once;
 
+/*
 extern stream_data_t *stream_buffer;
 extern Array_Blocking_Queue_Integer abq1;
+*/
+// ------------------------------------------------
+
+// -----------From Polyphase Channelizer-----------
+extern unsigned int num_channels;
+
+extern float complex *channelizer_output;
+extern Array_Blocking_Queue_Integer abq2;
 // ------------------------------------------------
 
 int socket_setup(socket_handle *sock)
@@ -51,13 +61,26 @@ void *udp_send_thread(void *arg)
     socket_handle *sock = arg;
 
     // Array_Blocking_Queueの何番目に格納したかを示すインデックス
-    int abq1_index = 0;
+    // int abq1_index = 0;
+
+    // Array_Blocking_Queue（abq2）の何番目に格納したかを示すインデックス
+    int abq2_index = 0;
+
+    // チャネライズ後の1チャネルあたりのサンプル数
+    unsigned int num_frames = num_samps_per_once / num_channels;
+
+    // 送信データ用バッファ
+    float send_buf[num_samps_per_once * 2];
+
+    // 送信データサイズ
+    int send_size = 0;
 
     int i = 0;
 
     // Actual streaming
     while (running)
     {
+        /*
         // キューから取り出し
         if (blocking_queue_take(&abq1, &abq1_index))
         {
@@ -66,13 +89,40 @@ void *udp_send_thread(void *arg)
         }
 
         // Send stream data
-        if (sendto(sock->sockfd, stream_buffer[abq1_index].samples, num_samps_per_once * 2 * sizeof(int16_t), 0, (struct sockaddr *)&sock->server_addr, sizeof(sock->server_addr)) < 0)
+        if (sendto(sock->sockfd, (unsigned char*)stream_buffer[abq1_index].samples, num_samps_per_once * 2 * sizeof(int16_t), 0, (struct sockaddr *)&sock->server_addr, sizeof(sock->server_addr)) < 0)
+        {
+            perror("UDP send failed\n");
+            break;
+        }
+        */
+
+        // キューから取り出し
+        if (blocking_queue_take(&abq2, &abq2_index))
+        {
+            printf("Take channelizer output error.\n");
+            break;
+        }
+
+        // float complexからfloatに変換
+        for (int i = 0; i < (int)num_frames; i++)
+        {
+            for (int j = 0; j < (int)num_channels; j++)
+            {
+                send_buf[(i * 2) + (j * num_frames * 2)] = crealf(channelizer_output[abq2_index * num_frames * num_channels + i * num_channels + j]);
+                send_buf[(i * 2) + (j * num_frames * 2) + 1] = cimagf(channelizer_output[abq2_index * num_frames * num_channels + i * num_channels + j]);
+            }
+        }
+
+        send_size = sizeof(send_buf);
+
+        // Send channelizer output
+        if (sendto(sock->sockfd, (unsigned char*)send_buf, send_size, 0, (struct sockaddr *)&sock->server_addr, sizeof(sock->server_addr)) < 0)
         {
             perror("UDP send failed\n");
             break;
         }
 
-        printf("Send: %d\n", i);
+        printf("Send: %d[byte],  %d,  %f\n", send_size, i, send_buf[100]);
         i++;
     }
 
