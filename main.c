@@ -31,8 +31,8 @@ double freq = 2426e6;
 double rate = 10e6;
 // Gain
 double gain = 40.0;
-// Device args
-char *device_args = NULL;
+// Device args (e.g. "type=b200")
+char *device_args = "";
 // Channel (0 or 1)
 size_t channel = 0;
 // Antenna ("TX/RX" or "RX2")
@@ -123,9 +123,6 @@ int main(int argc, char *argv[])
             break;
         }
     }
-
-    if (!device_args)
-        device_args = strdup("");
 
     // ------------------------Create queue------------------------
     // Init the blocking queue
