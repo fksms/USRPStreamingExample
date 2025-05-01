@@ -104,19 +104,28 @@ void *udp_send_thread(void *arg)
         }
 
         // float complexからfloatに変換
+        //
+        // --------------------------------
+        // チャネライザの出力の並べ替えを行い、UDP送信用のバッファに格納する
+        //
+        // a_0, b_0, c_0, d_0, e_0, ..., a_1, b_1, c_1, d_1, e_1, ...
+        // ↓
+        // a_0, a_1, a_2, ..., a_n, b_0, b_1, b_2, ..., b_n, c_0, ...
+        // --------------------------------
+        //
         for (int i = 0; i < (int)num_frames; i++)
         {
             for (int j = 0; j < (int)num_channels; j++)
             {
-                send_buf[(i * 2) + (j * num_frames * 2)] = crealf(channelizer_output[abq2_index * num_frames * num_channels + i * num_channels + j]);
-                send_buf[(i * 2) + (j * num_frames * 2) + 1] = cimagf(channelizer_output[abq2_index * num_frames * num_channels + i * num_channels + j]);
+                send_buf[(j * num_frames * 2) + (i * 2)] = crealf(channelizer_output[abq2_index * num_frames * num_channels + i * num_channels + j]);
+                send_buf[(j * num_frames * 2) + (i * 2) + 1] = cimagf(channelizer_output[abq2_index * num_frames * num_channels + i * num_channels + j]);
             }
         }
 
         send_size = sizeof(send_buf);
 
         // Send channelizer output
-        if (sendto(sock->sockfd, (unsigned char*)send_buf, send_size, 0, (struct sockaddr *)&sock->server_addr, sizeof(sock->server_addr)) < 0)
+        if (sendto(sock->sockfd, (unsigned char *)send_buf, send_size, 0, (struct sockaddr *)&sock->server_addr, sizeof(sock->server_addr)) < 0)
         {
             perror("UDP send failed\n");
             break;

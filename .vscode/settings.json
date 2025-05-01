@@ -30,6 +30,7 @@
         "inet.h": "c",
         "string.h": "c",
         "liquid.h": "c",
-        "complex.h": "c"
+        "complex.h": "c",
+        "pfbch.h": "c"
     }
 }

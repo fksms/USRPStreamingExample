@@ -90,6 +90,19 @@ void *channelizer_thread(void *arg)
         }
 
         // チャネライザに投入
+        //
+        // --------------------------------
+        // チャネライザの出力は以下のようになる
+        //
+        // <channel>_<frame> とすると、
+        // a_0, b_0, c_0, d_0, e_0, ..., a_1, b_1, c_1, d_1, e_1, ...
+        // となる。
+        //
+        // 後段の処理で、
+        // a_0, a_1, a_2, ..., a_n, b_0, b_1, b_2, ..., b_n, c_0, ...
+        // となるように並べ替えを行う
+        // --------------------------------
+        //
         for (int i = 0; i < (int)num_frames; i++)
         {
             firpfbch_crcf_analyzer_execute(*q, &in[i * num_channels], &channelizer_output[abq2_index * num_frames * num_channels + i * num_channels]);

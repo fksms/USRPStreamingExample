@@ -26,15 +26,17 @@ pthread_mutex_t mutex;
 
 // ---------------For USRP Streaming---------------
 // Center frequency
-double freq = 2476e6;
+double freq = 2426e6;
 // Sampling rate
 double rate = 10e6;
 // Gain
-double gain = 30.0;
+double gain = 40.0;
 // Device args
 char *device_args = NULL;
-// Channel
+// Channel (0 or 1)
 size_t channel = 0;
+// Antenna ("TX/RX" or "RX2")
+char *antenna = "TX/RX";
 // Number of samples per once
 size_t num_samps_per_once = 1000;
 
@@ -59,9 +61,9 @@ Array_Blocking_Queue_Integer abq2;
 // ------------For Polyphase Channelizer-----------
 // Number of channels
 unsigned int num_channels = 5;
-// Filter delay
-unsigned int delay = 4;
-// Stop-band attenuation
+// Filter delay（タップ数）
+unsigned int delay = 64;
+// Stop-band attenuation (dB)
 float As = 60;
 
 // チャネライザ出力を格納

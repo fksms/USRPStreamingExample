@@ -20,6 +20,7 @@ extern double rate;
 extern double gain;
 extern char *device_args;
 extern size_t channel;
+extern char *antenna;
 extern size_t num_samps_per_once;
 
 extern stream_data_t *stream_buffer;
@@ -57,6 +58,14 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
         .dsp_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
     };
     uhd_tune_result_t tune_result;
+
+    // Set RX antenna
+    error = uhd_usrp_set_rx_antenna(usrp, antenna, channel);
+    if (error)
+    {
+        printf("%u\n", error);
+        return error;
+    }
 
     // Set rate
     error = uhd_usrp_set_rx_rate(usrp, rate, channel);
