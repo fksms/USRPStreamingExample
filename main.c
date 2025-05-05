@@ -16,7 +16,7 @@
 #include "usrp.h"
 // #include "fft.h"
 #include "pfbch.h"
-#include "udp_send.h"
+// #include "udp_send.h"
 #include "take_queue.h"
 
 // ---------------------Status---------------------
@@ -38,7 +38,7 @@ size_t channel = 0;
 // Antenna ("TX/RX" or "RX2")
 char *antenna = "TX/RX";
 // Number of samples per once
-size_t num_samps_per_once = 1000;
+size_t num_samps_per_once = 2000;
 
 // ストリーミングデータを格納するためのバッファ
 stream_data_t *stream_buffer;
@@ -70,6 +70,13 @@ float As = 60;
 float complex *channelizer_output;
 // バッファ内のデータが格納された位置を格納
 Array_Blocking_Queue_Integer abq2;
+// ------------------------------------------------
+
+// ---------------For Burst Generator--------------
+// バースト出力を格納
+float complex *burst_output;
+// バッファ内のデータが格納された位置を格納
+Array_Blocking_Queue_Integer *abq3;
 // ------------------------------------------------
 
 void print_help(void)
@@ -116,11 +123,11 @@ int main(int argc, char *argv[])
 
         case 'h':
             print_help();
-            break;
+            return 0;
 
         default:
             print_help();
-            break;
+            return 0;
         }
     }
 
@@ -146,6 +153,17 @@ int main(int argc, char *argv[])
     {
         printf("Init blocking queue failed\n");
         return -1;
+    }
+
+    // Init the blocking queue
+    abq3 = (Array_Blocking_Queue_Integer *)malloc(sizeof(Array_Blocking_Queue_Integer) * num_channels);
+    for (int i = 0; i < (int)num_channels; i++)
+    {
+        if (blocking_queue_init(&abq3[i], CHANNELIZER_OUTPUT_QUEUE_SIZE))
+        {
+            printf("Init blocking queue failed\n");
+            return -1;
+        }
     }
     // ------------------------------------------------------------
 
@@ -191,6 +209,13 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    // Setup Burst Generator
+    if (burst_generator_setup())
+    {
+        printf("Setup Burst Generator failed\n");
+        return -1;
+    }
+
     /*
     // FFTW handle
     fftw_handle fh;
@@ -203,6 +228,7 @@ int main(int argc, char *argv[])
     }
     */
 
+    /*
     // Socket handle
     socket_handle sock;
 
@@ -212,6 +238,7 @@ int main(int argc, char *argv[])
         printf("Setup socket failed\n");
         return -1;
     }
+    */
     // ------------------------------------------------------------
 
     // -----------------Setting pthread attributes-----------------
@@ -251,25 +278,31 @@ int main(int argc, char *argv[])
     // ------------------------Create thread-----------------------
     pthread_t usrpStreamThread;
     pthread_t channelizerThread;
+    pthread_t burstGeneratorThread;
     // pthread_t fftThread;
-    pthread_t udpSendThread;
-    // pthread_t takeQueueThread;
+    // pthread_t udpSendThread;
+    pthread_t takeQueueThread[num_channels];
+
+    // Create Take queue thread
+    int indices[num_channels];
+    for (int i = 0; i < (int)num_channels; i++)
+    {
+        indices[i] = i;
+        if (pthread_create(&takeQueueThread[i], &attr, take_queue_thread, &indices[i]))
+        {
+            printf("Create take_queue_thread failed\n");
+            return -1;
+        }
+    }
 
     /*
-    // Create Take queue thread
-    if (pthread_create(&takeQueueThread, NULL, take_queue_thread, NULL))
-    {
-        printf("Create take_queue_thread failed\n");
-        return -1;
-    }
-    */
-
     // Create UDP send thread
     if (pthread_create(&udpSendThread, NULL, udp_send_thread, (void *)&sock))
     {
         printf("Create udp_send_thread failed\n");
         return -1;
     }
+    */
 
     /*
     // Create FFT thread
@@ -280,8 +313,15 @@ int main(int argc, char *argv[])
     }
     */
 
+    // Create Burst Generator thread
+    if (pthread_create(&burstGeneratorThread, NULL, burst_generator_thread, NULL))
+    {
+        printf("Create burst_generator_thread failed\n");
+        return -1;
+    }
+
     // Create Channelizer thread
-    if (pthread_create(&channelizerThread, &attr, channelizer_thread, (void *)&ch))
+    if (pthread_create(&channelizerThread, NULL, channelizer_thread, (void *)&ch))
     {
         printf("Create channelizer_thread failed\n");
         return -1;
@@ -310,6 +350,13 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    // Join Burst Generator thread
+    if (pthread_join(burstGeneratorThread, NULL))
+    {
+        printf("Join burst_generator_thread failed\n");
+        return -1;
+    }
+
     /*
     // Join FFT thread
     if (pthread_join(fftThread, NULL))
@@ -319,30 +366,35 @@ int main(int argc, char *argv[])
     }
     */
 
+    /*
     // Join UDP send thread
     if (pthread_join(udpSendThread, NULL))
     {
         printf("Join udp_send_thread failed\n");
         return -1;
     }
-
-    /*
-    // Join Take queue thread
-    if (pthread_join(takeQueueThread, NULL))
-    {
-        printf("Join take_queue_thread failed\n");
-        return -1;
-    }
     */
+
+    // Join Take queue thread
+    for (int i = 0; i < (int)num_channels; i++)
+    {
+        if (pthread_join(takeQueueThread[i], NULL))
+        {
+            printf("Join take_queue_thread failed\n");
+            return -1;
+        }
+    }
     // ------------------------------------------------------------
 
     // ----------------------------Close---------------------------
+    /*
     // Close socket
     if (socket_close(sock))
     {
         printf("Close socket failed\n");
         return -1;
     }
+    */
 
     /*
     // Close FFT
@@ -352,6 +404,13 @@ int main(int argc, char *argv[])
         return -1;
     }
     */
+
+    // Close Burst Generator
+    if (burst_generator_close())
+    {
+        printf("Close Burst Generator failed\n");
+        return -1;
+    }
 
     // Close FIR Polyphase Channelizer
     if (channelizer_close(ch))
@@ -386,6 +445,12 @@ int main(int argc, char *argv[])
     // Closes the blocking queue.
     blocking_queue_destroy(&abq1);
     blocking_queue_destroy(&abq2);
+    for (int i = 0; i < (int)num_channels; i++)
+    {
+        blocking_queue_destroy(&abq3[i]);
+    }
+
+    free(abq3);
     // ------------------------------------------------------------
 
     return 0;

@@ -12,6 +12,10 @@ extern sig_atomic_t running;
 extern pthread_mutex_t mutex;
 // ------------------------------------------------
 
+// --------------From USRP Streaming---------------
+extern size_t num_samps_per_once;
+// ------------------------------------------------
+
 // --------------------From FFT--------------------
 /*
 extern int fft_size;
@@ -22,29 +26,45 @@ extern Array_Blocking_Queue_Integer abq2;
 // ------------------------------------------------
 
 // -----------From Polyphase Channelizer-----------
+extern unsigned int num_channels;
+
+/*
 extern float complex *channelizer_output;
 extern Array_Blocking_Queue_Integer abq2;
+*/
+// ------------------------------------------------
+
+// --------------From Burst Generator--------------
+extern float complex *burst_output;
+extern Array_Blocking_Queue_Integer *abq3;
 // ------------------------------------------------
 
 void *take_queue_thread(void *arg)
 {
+    int ch = *(int *)arg;
+
     unsigned int i = 0;
 
-    // Array_Blocking_Queue（abq2）の何番目に格納したかを示すインデックス
-    int abq2_index = 0;
+    // チャネライズ後の1チャネルあたりのサンプル数
+    unsigned int num_frames = num_samps_per_once / num_channels;
+
+    // Array_Blocking_Queue（abq3）の何番目に格納したかを示すインデックス
+    int abq3_index = 0;
+
+    float complex sample = 0.0f;
 
     while (running)
     {
         // キューから取り出し
-        if (blocking_queue_take(&abq2, &abq2_index))
+        if (blocking_queue_take(&abq3[ch], &abq3_index))
         {
-            printf("Take FFT data error.\n");
+            printf("Take burst data error.\n");
             break;
         }
 
-        // printf("%d\t\t%lf\n", i, fft_data[abq2_index * fft_size + 1]);
+        sample = burst_output[abq3_index * num_samps_per_once + ch * num_frames + 0];
 
-        printf("%d\n", i);
+        printf("%d\t%d\t%d\t%f\t%f\n", ch, i, abq3_index, crealf(sample), cimagf(sample));
 
         i++;
     }

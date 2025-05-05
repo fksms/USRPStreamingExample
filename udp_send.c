@@ -60,7 +60,7 @@ void *udp_send_thread(void *arg)
 {
     socket_handle *sock = arg;
 
-    // Array_Blocking_Queueの何番目に格納したかを示すインデックス
+    // Array_Blocking_Queue（abq1）の何番目に格納したかを示すインデックス
     // int abq1_index = 0;
 
     // Array_Blocking_Queue（abq2）の何番目に格納したかを示すインデックス
@@ -117,8 +117,8 @@ void *udp_send_thread(void *arg)
         {
             for (int j = 0; j < (int)num_channels; j++)
             {
-                send_buf[(j * num_frames * 2) + (i * 2)] = crealf(channelizer_output[abq2_index * num_frames * num_channels + i * num_channels + j]);
-                send_buf[(j * num_frames * 2) + (i * 2) + 1] = cimagf(channelizer_output[abq2_index * num_frames * num_channels + i * num_channels + j]);
+                send_buf[(j * num_frames * 2) + (i * 2)] = crealf(channelizer_output[abq2_index * num_samps_per_once + i * num_channels + j]);
+                send_buf[(j * num_frames * 2) + (i * 2) + 1] = cimagf(channelizer_output[abq2_index * num_samps_per_once + i * num_channels + j]);
             }
         }
 
