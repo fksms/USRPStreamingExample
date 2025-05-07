@@ -168,15 +168,15 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
     //
     // ----------------------------------------
     // バッファ1要素あたりの確保するメモリ量
-    // (sizeof(size_t) + num_samps_per_once * 2 * sizeof(int16_t))
+    // (sizeof(stream_data_t) + sizeof(int16_t) * num_samps_per_once * 2)
     //
-    // sizeof(size_t)       ：実際に受信したサンプルの数を格納する用（size_t）
+    // sizeof(stream_data_t)：stream_data_t構造体のサイズ
+    // sizeof(int16_t)      ：1サンプルあたりのデータサイズ（int16_t）（可変長配列メンバ用）
     // num_samps_per_once   ：1回で取得するサンプル数
     // 2                    ：I+Q
-    // sizeof(int16_t)      ：1サンプルあたりのデータサイズ（int16_t）
     // ----------------------------------------
     //
-    size_t element_size = sizeof(size_t) + num_samps_per_once * 2 * sizeof(int16_t);
+    size_t element_size = sizeof(stream_data_t) + sizeof(int16_t) * num_samps_per_once * 2;
     stream_buffer = (stream_data_t *)malloc(element_size * RX_STREAMER_RECV_QUEUE_SIZE);
 
     return 0;
