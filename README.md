@@ -4,9 +4,9 @@
 
 ### MacOS
 
-Install cmake, pkgconf, uhd, fftw and liquid-dsp
+Install cmake, pkgconf, uhd and liquid-dsp
 ```
-brew install cmake pkgconf uhd fftw liquid-dsp
+brew install cmake pkgconf uhd liquid-dsp
 ```
 
 Build (Release)

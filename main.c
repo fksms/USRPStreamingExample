@@ -79,6 +79,13 @@ float complex *burst_output;
 Array_Blocking_Queue_Integer *abq3;
 // ------------------------------------------------
 
+// ---------------For Burst Processor--------------
+// バースト出力を格納
+float complex *test_output;
+// バッファ内のデータが格納された位置を格納
+Array_Blocking_Queue_Integer *abq4;
+// ------------------------------------------------
+
 void print_help(void)
 {
     fprintf(stderr,
