@@ -7,17 +7,11 @@
 #include <complex.h>
 
 #include <uhd.h>
-#include <liquid/liquid.h>
 
-#define C_FEK_ARRAY_BLOCKING_QUEUE_INTEGER_IMPLEMENTATION
-#define C_FEK_FAIR_LOCK_IMPLEMENTATION
-
-#include "array_blocking_queue_integer.h"
+#include "brb.h"
+#include "lfrb.h"
 #include "usrp.h"
-// #include "fft.h"
-#include "pfbch.h"
-// #include "udp_send.h"
-#include "take_queue.h"
+#include "reader.h"
 
 // ---------------------Status---------------------
 volatile sig_atomic_t running = 1;
@@ -38,52 +32,10 @@ size_t channel = 0;
 // Antenna ("TX/RX" or "RX2")
 char *antenna = "TX/RX";
 // Number of samples per once
-size_t num_samps_per_once = 2000;
+size_t num_samps_per_once = NUM_SAMPS_PER_RECV;
 
 // ストリーミングデータを格納するためのバッファ
-stream_data_t *stream_buffer;
-// バッファ内のデータが格納された位置を格納
-Array_Blocking_Queue_Integer abq1;
-// ------------------------------------------------
-
-// --------------------For FFT---------------------
-/*
-// FFT Size (Must be power of two)
-int fft_size = 1024;
-
-// FFTデータを格納
-double *fft_data;
-// バッファ内のデータが格納された位置を格納
-Array_Blocking_Queue_Integer abq2;
-*/
-// ------------------------------------------------
-
-// ------------For Polyphase Channelizer-----------
-// Number of channels
-unsigned int num_channels = 5;
-// Filter delay（タップ数）
-unsigned int delay = 64;
-// Stop-band attenuation (dB)
-float As = 60;
-
-// チャネライザ出力を格納
-float complex *channelizer_output;
-// バッファ内のデータが格納された位置を格納
-Array_Blocking_Queue_Integer abq2;
-// ------------------------------------------------
-
-// ---------------For Burst Generator--------------
-// バースト出力を格納
-float complex *burst_output;
-// バッファ内のデータが格納された位置を格納
-Array_Blocking_Queue_Integer *abq3;
-// ------------------------------------------------
-
-// ---------------For Burst Processor--------------
-// バースト出力を格納
-float complex *test_output;
-// バッファ内のデータが格納された位置を格納
-Array_Blocking_Queue_Integer *abq4;
+BlockingRingBuffer rb;
 // ------------------------------------------------
 
 void print_help(void)
@@ -139,39 +91,8 @@ int main(int argc, char *argv[])
     }
 
     // ------------------------Create queue------------------------
-    // Init the blocking queue
-    if (blocking_queue_init(&abq1, RX_STREAMER_RECV_QUEUE_SIZE))
-    {
-        printf("Init blocking queue failed\n");
-        return -1;
-    }
-
-    /*
-    // Init the blocking queue
-    if (blocking_queue_init(&abq2, FFT_DATA_QUEUE_SIZE))
-    {
-        printf("Init blocking queue failed\n");
-        return -1;
-    }
-    */
-
-    // Init the blocking queue
-    if (blocking_queue_init(&abq2, CHANNELIZER_OUTPUT_QUEUE_SIZE))
-    {
-        printf("Init blocking queue failed\n");
-        return -1;
-    }
-
-    // Init the blocking queue
-    abq3 = (Array_Blocking_Queue_Integer *)malloc(sizeof(Array_Blocking_Queue_Integer) * num_channels);
-    for (int i = 0; i < (int)num_channels; i++)
-    {
-        if (blocking_queue_init(&abq3[i], CHANNELIZER_OUTPUT_QUEUE_SIZE))
-        {
-            printf("Init blocking queue failed\n");
-            return -1;
-        }
-    }
+    // Init the ring buffer
+    brb_init(&rb);
     // ------------------------------------------------------------
 
     // Init mutex
@@ -205,47 +126,6 @@ int main(int argc, char *argv[])
         printf("Setup USRP RX failed\n");
         return -1;
     }
-
-    // FIR Polyphase Channelizer handle
-    firpfbch_crcf ch;
-
-    // Setup FIR Polyphase Channelizer
-    if (channelizer_setup(&ch))
-    {
-        printf("Setup FIR Polyphase Channelizer failed\n");
-        return -1;
-    }
-
-    // Setup Burst Generator
-    if (burst_generator_setup())
-    {
-        printf("Setup Burst Generator failed\n");
-        return -1;
-    }
-
-    /*
-    // FFTW handle
-    fftw_handle fh;
-
-    // Setup FFT
-    if (fft_setup(&fh))
-    {
-        printf("Setup FFT failed\n");
-        return -1;
-    }
-    */
-
-    /*
-    // Socket handle
-    socket_handle sock;
-
-    // Setup socket
-    if (socket_setup(&sock))
-    {
-        printf("Setup socket failed\n");
-        return -1;
-    }
-    */
     // ------------------------------------------------------------
 
     // -----------------Setting pthread attributes-----------------
@@ -284,53 +164,12 @@ int main(int argc, char *argv[])
 
     // ------------------------Create thread-----------------------
     pthread_t usrpStreamThread;
-    pthread_t channelizerThread;
-    pthread_t burstGeneratorThread;
-    // pthread_t fftThread;
-    // pthread_t udpSendThread;
-    pthread_t takeQueueThread[num_channels];
+    pthread_t readerThread;
 
-    // Create Take queue thread
-    int indices[num_channels];
-    for (int i = 0; i < (int)num_channels; i++)
+    // Create Reader thread
+    if (pthread_create(&readerThread, &attr, reader_thread, NULL))
     {
-        indices[i] = i;
-        if (pthread_create(&takeQueueThread[i], &attr, take_queue_thread, &indices[i]))
-        {
-            printf("Create take_queue_thread failed\n");
-            return -1;
-        }
-    }
-
-    /*
-    // Create UDP send thread
-    if (pthread_create(&udpSendThread, NULL, udp_send_thread, (void *)&sock))
-    {
-        printf("Create udp_send_thread failed\n");
-        return -1;
-    }
-    */
-
-    /*
-    // Create FFT thread
-    if (pthread_create(&fftThread, NULL, fft_thread, (void *)&fh))
-    {
-        printf("Create fft_thread failed\n");
-        return -1;
-    }
-    */
-
-    // Create Burst Generator thread
-    if (pthread_create(&burstGeneratorThread, NULL, burst_generator_thread, NULL))
-    {
-        printf("Create burst_generator_thread failed\n");
-        return -1;
-    }
-
-    // Create Channelizer thread
-    if (pthread_create(&channelizerThread, NULL, channelizer_thread, (void *)&ch))
-    {
-        printf("Create channelizer_thread failed\n");
+        printf("Create reader_thread failed\n");
         return -1;
     }
 
@@ -350,82 +189,15 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    // Join Channelizer thread
-    if (pthread_join(channelizerThread, NULL))
+    // Join Reader thread
+    if (pthread_join(readerThread, NULL))
     {
-        printf("Join channelizer_thread failed\n");
+        printf("Join reader_thread failed\n");
         return -1;
-    }
-
-    // Join Burst Generator thread
-    if (pthread_join(burstGeneratorThread, NULL))
-    {
-        printf("Join burst_generator_thread failed\n");
-        return -1;
-    }
-
-    /*
-    // Join FFT thread
-    if (pthread_join(fftThread, NULL))
-    {
-        printf("Join fft_thread failed\n");
-        return -1;
-    }
-    */
-
-    /*
-    // Join UDP send thread
-    if (pthread_join(udpSendThread, NULL))
-    {
-        printf("Join udp_send_thread failed\n");
-        return -1;
-    }
-    */
-
-    // Join Take queue thread
-    for (int i = 0; i < (int)num_channels; i++)
-    {
-        if (pthread_join(takeQueueThread[i], NULL))
-        {
-            printf("Join take_queue_thread failed\n");
-            return -1;
-        }
     }
     // ------------------------------------------------------------
 
     // ----------------------------Close---------------------------
-    /*
-    // Close socket
-    if (socket_close(sock))
-    {
-        printf("Close socket failed\n");
-        return -1;
-    }
-    */
-
-    /*
-    // Close FFT
-    if (fft_close(fh))
-    {
-        printf("Close FFT failed\n");
-        return -1;
-    }
-    */
-
-    // Close Burst Generator
-    if (burst_generator_close())
-    {
-        printf("Close Burst Generator failed\n");
-        return -1;
-    }
-
-    // Close FIR Polyphase Channelizer
-    if (channelizer_close(ch))
-    {
-        printf("Close FIR Polyphase Channelizer failed\n");
-        return -1;
-    }
-
     // Close USRP RX
     if (usrp_rx_close(&usrp_rx))
     {
@@ -449,15 +221,8 @@ int main(int argc, char *argv[])
     }
 
     // ------------------------Close queue-------------------------
-    // Closes the blocking queue.
-    blocking_queue_destroy(&abq1);
-    blocking_queue_destroy(&abq2);
-    for (int i = 0; i < (int)num_channels; i++)
-    {
-        blocking_queue_destroy(&abq3[i]);
-    }
-
-    free(abq3);
+    // Destroy the ring buffer
+    brb_destroy(&rb);
     // ------------------------------------------------------------
 
     return 0;
