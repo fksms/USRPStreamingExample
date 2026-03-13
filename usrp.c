@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
-#include <pthread.h>
+#include <stdbool.h>
+#include <stdatomic.h>
 
 #include <uhd.h>
 
@@ -11,8 +11,7 @@
 #include "usrp.h"
 
 // ---------------------Status---------------------
-extern sig_atomic_t running;
-extern pthread_mutex_t mutex;
+extern _Atomic bool running;
 // ------------------------------------------------
 
 // ---------------For USRP Streaming---------------
@@ -188,7 +187,7 @@ void *usrp_stream_thread(void *arg)
     void *buf_ptrs[1] = {recv_buf};
 
     // Actual streaming
-    while (running)
+    while (atomic_load(&running))
     {
         // ストリームを受信
         uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, num_samps_per_once, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
@@ -216,9 +215,7 @@ void *usrp_stream_thread(void *arg)
     }
 
     // Stop
-    pthread_mutex_lock(&mutex);
-    running = 0;
-    pthread_mutex_unlock(&mutex);
+    atomic_store(&running, false);
 
     return NULL;
 }

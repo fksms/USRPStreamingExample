@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <string.h>
 #include <stdbool.h>
 #include <stdatomic.h>
 
