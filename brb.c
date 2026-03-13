@@ -14,22 +14,22 @@ void brb_init(BlockingRingBuffer *rb)
 bool brb_write(BlockingRingBuffer *rb, const iq_sample_t *src)
 {
     pthread_mutex_lock(&rb->mutex);
-    while (rb->write_pos - rb->read_pos + ELEMS_PER_RECV > BUF_ELEM)
+    while (rb->write_pos - rb->read_pos + INPUT_ELEMS > BUF_ELEM)
     {
         pthread_cond_wait(&rb->not_full, &rb->mutex);
     }
     uint32_t wi = rb->write_pos & BUF_MASK;
     uint32_t tail = BUF_ELEM - wi;
-    if (tail >= ELEMS_PER_RECV)
+    if (tail >= INPUT_ELEMS)
     {
-        memcpy(&rb->buf[wi], src, ELEMS_PER_RECV * sizeof(iq_sample_t));
+        memcpy(&rb->buf[wi], src, INPUT_ELEMS * sizeof(iq_sample_t));
     }
     else
     {
         memcpy(&rb->buf[wi], src, tail * sizeof(iq_sample_t));
-        memcpy(&rb->buf[0], src + tail, (ELEMS_PER_RECV - tail) * sizeof(iq_sample_t));
+        memcpy(&rb->buf[0], src + tail, (INPUT_ELEMS - tail) * sizeof(iq_sample_t));
     }
-    rb->write_pos += ELEMS_PER_RECV;
+    rb->write_pos += INPUT_ELEMS;
     pthread_cond_signal(&rb->not_empty);
     pthread_mutex_unlock(&rb->mutex);
     return true;

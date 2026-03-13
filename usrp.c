@@ -171,9 +171,6 @@ void *usrp_stream_thread(void *arg)
     // USRP RX handle
     uhd_usrp_rx_handle *usrp_rx = arg;
 
-    // Error condition on a receive call
-    // uhd_rx_metadata_error_code_t error_code;
-
     // 実際に取得したサンプル数
     size_t actual_num_samps;
 
@@ -181,7 +178,7 @@ void *usrp_stream_thread(void *arg)
     double timeout = 3.0; //[sec]
 
     // ストリーミングデータを格納するためのバッファ
-    static iq_sample_t recv_buf[ELEMS_PER_RECV];
+    static iq_sample_t recv_buf[INPUT_ELEMS];
 
     /* UHD は void* の配列を受け取る */
     void *buf_ptrs[1] = {recv_buf};
@@ -191,18 +188,17 @@ void *usrp_stream_thread(void *arg)
     {
         // ストリームを受信
         uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, num_samps_per_once, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
-        // uhd_rx_metadata_error_code(usrp_rx->rx_metadata, &error_code);
 
         // 受信サンプル数が想定と異なる場合
-        if (actual_num_samps != NUM_SAMPS_PER_RECV)
+        if (actual_num_samps != INPUT_SAMPS)
         {
             // エラー有りの場合は解放して終了
             printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
-            // printf("Streaming error: %d\n", error_code);
             break;
 
             // エラー有りの場合はContinueする
             // printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
+            // memset(recv_buf + actual_num_samps * 2, 0, (INPUT_SAMPS - actual_num_samps) * sizeof(iq_sample_t) * 2);
             // continue;
         }
 
