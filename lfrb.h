@@ -15,7 +15,7 @@
 #define ELEMS_PER_RECV (NUM_SAMPS_PER_RECV * 2)
 #define OUTPUT_SAMPS 32768 // 2の冪乗
 #define OUTPUT_ELEMS (OUTPUT_SAMPS * 2)
-#define BUF_ELEM 131072 // 2の冪乗で OUTPUT_ELEMS の倍数
+#define BUF_ELEM 1048576 // 2の冪乗で OUTPUT_ELEMS の倍数（16倍）
 #define BUF_MASK (BUF_ELEM - 1)
 
 typedef int16_t iq_sample_t; /* I, Q が交互に並ぶ生配列 */

@@ -25,7 +25,7 @@ find_package(UHD REQUIRED)
 #find_package(Liquid REQUIRED)
 
 # 実行ファイルを作成
-add_executable(${PROJECT_NAME} main.c usrp.c brb.c reader.c)
+add_executable(${PROJECT_NAME} main.c usrp.c lfrb.c reader.c)
 
 # インクルードするディレクトリの設定
 target_include_directories(${PROJECT_NAME} PRIVATE

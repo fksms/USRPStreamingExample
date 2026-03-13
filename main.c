@@ -21,7 +21,7 @@ _Atomic bool running = true;
 // Center frequency
 double freq = 2426e6;
 // Sampling rate
-double rate = 10e6;
+double rate = 20e6;
 // Gain
 double gain = 40.0;
 // Device args (e.g. "type=b200")
@@ -34,7 +34,7 @@ char *antenna = "TX/RX";
 size_t num_samps_per_once = NUM_SAMPS_PER_RECV;
 
 // ストリーミングデータを格納するためのバッファ
-BlockingRingBuffer rb;
+LockFreeRingBuffer rb;
 // ------------------------------------------------
 
 void print_help(void)
@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
     }
 
     // Init the ring buffer
-    brb_init(&rb);
+    lfrb_init(&rb);
 
     // ----------------------------Setup---------------------------
     // USRP handle
@@ -202,9 +202,6 @@ int main(int argc, char *argv[])
         return -1;
     }
     // ------------------------------------------------------------
-
-    // Destroy the ring buffer
-    brb_destroy(&rb);
 
     return 0;
 }

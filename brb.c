@@ -14,10 +14,9 @@ void brb_init(BlockingRingBuffer *rb)
 bool brb_write(BlockingRingBuffer *rb, const iq_sample_t *src)
 {
     pthread_mutex_lock(&rb->mutex);
-    if (rb->write_pos - rb->read_pos + ELEMS_PER_RECV > BUF_ELEM)
+    while (rb->write_pos - rb->read_pos + ELEMS_PER_RECV > BUF_ELEM)
     {
-        pthread_mutex_unlock(&rb->mutex);
-        return false;
+        pthread_cond_wait(&rb->not_full, &rb->mutex);
     }
     uint32_t wi = rb->write_pos & BUF_MASK;
     uint32_t tail = BUF_ELEM - wi;
