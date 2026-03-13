@@ -7,15 +7,21 @@
 #include <stdatomic.h>
 
 /* ---------------------------------------------------------------
- * IQ サンプル = int16_t × 2 (I, Q 各16bit)
- * NUM_SAMPS_PER_RECV: 1回の受信サンプル数
+ * INPUT_SAMPS: writerスレッドが1回で書き込むサンプル数
+ * OUTPUT_SAMPS: Readerスレッドが1回で読み出すサンプル数
+ * BUF_ELEM: バッファのサンプル数（2の冪乗）
  * ---------------------------------------------------------------*/
-#define NUM_SAMPS_PER_RECV 1000
-#define ELEMS_PER_RECV (NUM_SAMPS_PER_RECV * 2)
-#define OUTPUT_SAMPS 32768              // 2の冪乗
+#define INPUT_SAMPS 1000
+#define INPUT_ELEMS (INPUT_SAMPS * 2) // 2はIとQの分
+#define OUTPUT_SAMPS 30000
 #define OUTPUT_ELEMS (OUTPUT_SAMPS * 2) // 2はIとQの分
-#define BUF_ELEM (OUTPUT_ELEMS * 16)    // 16はバッファに格納する受信サンプル数の倍数（2の冪乗）
+#define BUF_ELEM 1048576
 #define BUF_MASK (BUF_ELEM - 1)
+
+// BUF_ELEMが2の冪乗でない場合はコンパイルエラー
+#if ((BUF_ELEM & (BUF_ELEM - 1)) != 0)
+#error "BUF_ELEM must be a power of 2"
+#endif
 
 typedef int16_t iq_sample_t; /* I, Q が交互に並ぶ生配列 */
 

@@ -31,7 +31,7 @@ size_t channel = 0;
 // Antenna ("TX/RX" or "RX2")
 char *antenna = "TX/RX";
 // Number of samples per once
-size_t num_samps_per_once = NUM_SAMPS_PER_RECV;
+size_t num_samps_per_once = INPUT_SAMPS;
 
 // ストリーミングデータを格納するためのバッファ
 LockFreeRingBuffer rb;

@@ -30,23 +30,23 @@ bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src)
     uint32_t rp = atomic_load_explicit(&rb->read_pos, memory_order_acquire);
 
     // 書き込み位置と読み出し位置の差がバッファサイズを超える場合は溢れとみなす
-    if (wp - rp + ELEMS_PER_RECV > BUF_ELEM)
+    if (wp - rp + INPUT_ELEMS > BUF_ELEM)
         return false;
 
     uint32_t wi = wp & BUF_MASK;
     uint32_t tail = BUF_ELEM - wi;
 
-    if (tail >= ELEMS_PER_RECV)
+    if (tail >= INPUT_ELEMS)
     {
-        memcpy(&rb->buf[wi], src, ELEMS_PER_RECV * sizeof(iq_sample_t));
+        memcpy(&rb->buf[wi], src, INPUT_ELEMS * sizeof(iq_sample_t));
     }
     else
     {
         memcpy(&rb->buf[wi], src, tail * sizeof(iq_sample_t));
-        memcpy(&rb->buf[0], src + tail, (ELEMS_PER_RECV - tail) * sizeof(iq_sample_t));
+        memcpy(&rb->buf[0], src + tail, (INPUT_ELEMS - tail) * sizeof(iq_sample_t));
     }
 
-    atomic_store_explicit(&rb->write_pos, wp + ELEMS_PER_RECV, memory_order_release);
+    atomic_store_explicit(&rb->write_pos, wp + INPUT_ELEMS, memory_order_release);
     return true;
 }
 
