@@ -1,16 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
-#include <pthread.h>
-#include <complex.h>
+#include <stdbool.h>
+#include <stdatomic.h>
 
 #include "brb.h"
 #include "lfrb.h"
 
 // ---------------------Status---------------------
-extern sig_atomic_t running;
-extern pthread_mutex_t mutex;
+extern _Atomic bool running;
 // ------------------------------------------------
 
 // --------------From USRP Streaming---------------
@@ -23,7 +21,7 @@ void *reader_thread(void *arg)
 
     static iq_sample_t output_buf[OUTPUT_ELEMS];
 
-    while (running)
+    while (atomic_load(&running))
     {
         brb_read(&rb, output_buf);
 
@@ -33,9 +31,7 @@ void *reader_thread(void *arg)
     }
 
     // Stop
-    pthread_mutex_lock(&mutex);
-    running = 0;
-    pthread_mutex_unlock(&mutex);
+    atomic_store(&running, false);
 
     return NULL;
 }

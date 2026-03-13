@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 #include <getopt.h>
 #include <pthread.h>
-#include <complex.h>
+#include <stdbool.h>
+#include <stdatomic.h>
 
 #include <uhd.h>
 
@@ -14,8 +14,7 @@
 #include "reader.h"
 
 // ---------------------Status---------------------
-volatile sig_atomic_t running = 1;
-pthread_mutex_t mutex;
+_Atomic bool running = true;
 // ------------------------------------------------
 
 // ---------------For USRP Streaming---------------
@@ -90,17 +89,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    // ------------------------Create queue------------------------
     // Init the ring buffer
     brb_init(&rb);
-    // ------------------------------------------------------------
-
-    // Init mutex
-    if (pthread_mutex_init(&mutex, NULL))
-    {
-        printf("Init mutex failed\n");
-        return -1;
-    }
 
     // ----------------------------Setup---------------------------
     // USRP handle
@@ -213,17 +203,8 @@ int main(int argc, char *argv[])
     }
     // ------------------------------------------------------------
 
-    // Destroy mutex
-    if (pthread_mutex_destroy(&mutex))
-    {
-        printf("Destroy mutex failed\n");
-        return -1;
-    }
-
-    // ------------------------Close queue-------------------------
     // Destroy the ring buffer
     brb_destroy(&rb);
-    // ------------------------------------------------------------
 
     return 0;
 }
