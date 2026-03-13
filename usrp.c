@@ -6,7 +6,8 @@
 
 #include <uhd.h>
 
-#include "array_blocking_queue_integer.h"
+#include "brb.h"
+#include "lfrb.h"
 #include "usrp.h"
 
 // ---------------------Status---------------------
@@ -23,8 +24,7 @@ extern size_t channel;
 extern char *antenna;
 extern size_t num_samps_per_once;
 
-extern stream_data_t *stream_buffer;
-extern Array_Blocking_Queue_Integer abq1;
+extern BlockingRingBuffer rb;
 // ------------------------------------------------
 
 int usrp_setup(uhd_usrp_handle *usrp)
@@ -164,21 +164,6 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
         return error;
     }
 
-    // Allocate a buffer for streaming
-    //
-    // ----------------------------------------
-    // バッファ1要素あたりの確保するメモリ量
-    // (sizeof(stream_data_t) + sizeof(int16_t) * num_samps_per_once * 2)
-    //
-    // sizeof(stream_data_t)：stream_data_t構造体のサイズ
-    // sizeof(int16_t)      ：1サンプルあたりのデータサイズ（int16_t）（可変長配列メンバ用）
-    // num_samps_per_once   ：1回で取得するサンプル数
-    // 2                    ：I+Q
-    // ----------------------------------------
-    //
-    size_t element_size = sizeof(stream_data_t) + sizeof(int16_t) * num_samps_per_once * 2;
-    stream_buffer = (stream_data_t *)malloc(element_size * RX_STREAMER_RECV_QUEUE_SIZE);
-
     return 0;
 }
 
@@ -188,58 +173,46 @@ void *usrp_stream_thread(void *arg)
     uhd_usrp_rx_handle *usrp_rx = arg;
 
     // Error condition on a receive call
-    uhd_rx_metadata_error_code_t error_code;
+    // uhd_rx_metadata_error_code_t error_code;
 
     // 実際に取得したサンプル数
     size_t actual_num_samps;
 
-    // バッファへのポインタ
-    void *pointer_to_buf = NULL;
-
     // タイムアウト時間
     double timeout = 3.0; //[sec]
 
-    // Array_Blocking_Queueの何番目に格納したかを示すインデックス
-    int abq1_index = 0;
+    // ストリーミングデータを格納するためのバッファ
+    static iq_sample_t recv_buf[ELEMS_PER_RECV];
+
+    /* UHD は void* の配列を受け取る */
+    void *buf_ptrs[1] = {recv_buf};
 
     // Actual streaming
     while (running)
     {
-        // バッファへのポインタを設定
-        pointer_to_buf = stream_buffer[abq1_index].samples;
-
         // ストリームを受信
-        uhd_rx_streamer_recv(usrp_rx->rx_streamer, &pointer_to_buf, num_samps_per_once, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
-        uhd_rx_metadata_error_code(usrp_rx->rx_metadata, &error_code);
+        uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, num_samps_per_once, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
+        // uhd_rx_metadata_error_code(usrp_rx->rx_metadata, &error_code);
 
-        // エラー有りの場合
-        if (error_code)
+        // 受信サンプル数が想定と異なる場合
+        if (actual_num_samps != NUM_SAMPS_PER_RECV)
         {
             // エラー有りの場合は解放して終了
+            printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
             // printf("Streaming error: %d\n", error_code);
-            // break;
+            break;
 
             // エラー有りの場合はContinueする
-            printf("Streaming error: %d\n", error_code);
-            continue;
+            // printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
+            // continue;
         }
 
-        // 実際に取得したサンプルの数を格納
-        stream_buffer[abq1_index].num_of_samples = actual_num_samps;
-
-        // キューへの追加が失敗した場合は解放して終了
-        if (blocking_queue_add(&abq1, abq1_index))
+        if (!brb_write(&rb, recv_buf))
         {
-            printf("Streame buffer is full.\n");
+            // バッファ溢れの場合
+            printf("Ring buffer overflow.\n");
             break;
         }
-
-        // インデックスをインクリメント
-#if (RX_STREAMER_RECV_QUEUE_SIZE & (RX_STREAMER_RECV_QUEUE_SIZE - 1)) == 0 // Queue sizeが2の冪乗の場合
-        abq1_index = (abq1_index + 1) & (RX_STREAMER_RECV_QUEUE_SIZE - 1);
-#else
-        abq1_index = (abq1_index + 1) % RX_STREAMER_RECV_QUEUE_SIZE;
-#endif
     }
 
     // Stop
@@ -252,9 +225,6 @@ void *usrp_stream_thread(void *arg)
 
 int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx)
 {
-    // Memory release
-    free(stream_buffer);
-
     // UHD error codes
     uhd_error error;
 

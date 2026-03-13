@@ -32,5 +32,6 @@
         "liquid.h": "c",
         "complex.h": "c",
         "pfbch.h": "c"
-    }
+    },
+    "editor.formatOnSave": true
 }
