@@ -9,13 +9,12 @@
 /* ---------------------------------------------------------------
  * IQ サンプル = int16_t × 2 (I, Q 各16bit)
  * NUM_SAMPS_PER_RECV: 1回の受信サンプル数
- * BUF_ELEM:  バッファの総要素数 (int16_t 単位, 2のべき乗)
  * ---------------------------------------------------------------*/
 #define NUM_SAMPS_PER_RECV 1000
 #define ELEMS_PER_RECV (NUM_SAMPS_PER_RECV * 2)
-#define OUTPUT_SAMPS 32768 // 2の冪乗
-#define OUTPUT_ELEMS (OUTPUT_SAMPS * 2)
-#define BUF_ELEM 1048576 // 2の冪乗で OUTPUT_ELEMS の倍数（16倍）
+#define OUTPUT_SAMPS 32768              // 2の冪乗
+#define OUTPUT_ELEMS (OUTPUT_SAMPS * 2) // 2はIとQの分
+#define BUF_ELEM (OUTPUT_ELEMS * 16)    // 16はバッファに格納する受信サンプル数の倍数（2の冪乗）
 #define BUF_MASK (BUF_ELEM - 1)
 
 typedef int16_t iq_sample_t; /* I, Q が交互に並ぶ生配列 */
