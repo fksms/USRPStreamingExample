@@ -23,7 +23,7 @@ extern size_t channel;
 extern char *antenna;
 extern size_t num_samps_per_once;
 
-extern BlockingRingBuffer rb;
+extern LockFreeRingBuffer rb;
 // ------------------------------------------------
 
 int usrp_setup(uhd_usrp_handle *usrp)
@@ -206,7 +206,7 @@ void *usrp_stream_thread(void *arg)
             // continue;
         }
 
-        if (!brb_write(&rb, recv_buf))
+        if (!lfrb_write(&rb, recv_buf))
         {
             // バッファ溢れの場合
             printf("Ring buffer overflow.\n");
