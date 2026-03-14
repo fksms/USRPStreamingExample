@@ -19,7 +19,7 @@
 #define BUF_MASK (BUF_ELEM - 1)
 
 // BUF_ELEMが2の冪乗でない場合はコンパイルエラー
-#if ((BUF_ELEM & (BUF_ELEM - 1)) != 0)
+#if ((BUF_ELEM & BUF_MASK) != 0)
 #error "BUF_ELEM must be a power of 2"
 #endif
 

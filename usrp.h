@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 // USRP RX handle
-typedef struct _uhd_usrp_rx_handle
+typedef struct
 {
     // USRP handle
     uhd_usrp_handle usrp;

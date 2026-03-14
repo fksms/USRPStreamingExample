@@ -29,10 +29,16 @@ void kaiser_window(double *w, int N, double beta)
 }
 
 // FIRフィルタ設計（低通）
-// fc: 正規化カットオフ周波数（0.0〜0.5）
-// N: フィルタ長
-// beta: カイザー窓パラメータ
 // h: 出力係数配列（N要素）
+// N: フィルタ長
+// fc: 正規化カットオフ周波数（0.0〜0.5）
+// beta: カイザー窓パラメータ
+//
+// betaの目安:
+// 0.0: Rectangular window
+// 5.0: Similar to a Hamming window
+// 6.0: Similar to a Hann window
+// 8.6: Similar to a Blackman window
 void fir_design_kaiser_lowpass(double *h, int N, double fc, double beta)
 {
     double *w = (double *)malloc(N * sizeof(double));

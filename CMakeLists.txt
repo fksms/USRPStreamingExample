@@ -21,16 +21,16 @@ find_package(Threads REQUIRED)
 # パッケージの確認
 find_package(PkgConfig REQUIRED)
 find_package(UHD REQUIRED)
-#find_package(FFTW REQUIRED)
+find_package(FFTW REQUIRED)
 #find_package(Liquid REQUIRED)
 
 # 実行ファイルを作成
-add_executable(${PROJECT_NAME} main.c usrp.c lfrb.c reader.c)
+add_executable(${PROJECT_NAME} main.c usrp.c lfrb.c channelizer.c fir_kaiser.c)
 
 # インクルードするディレクトリの設定
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${UHD_INCLUDE_DIRS}
-    #${FFTW_INCLUDE_DIRS}
+    ${FFTW_INCLUDE_DIRS}
     #${LIQUID_INCLUDE_DIRS}
 )
 
@@ -39,6 +39,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Threads::Threads
     ${UHD_LIBRARIES}
     #${FFTW_LIBRARIES}
-    #${FFTW_DOUBLE_LIB} # FFTWのライブラリはdoubleのみ使用
+    ${FFTW_DOUBLE_LIB} # FFTWのライブラリはdoubleのみ使用
     #${LIQUID_LIBRARIES}
 )
