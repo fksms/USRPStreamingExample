@@ -19,7 +19,7 @@ _Atomic bool running = true;
 
 // ---------------For USRP Streaming---------------
 // Center frequency
-double freq = 2426e6;
+double freq = 924e6;
 // Sampling rate
 double rate = 10e6;
 // Gain
