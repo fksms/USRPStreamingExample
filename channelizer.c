@@ -48,7 +48,7 @@ int channelizer_setup(channelizer_handle *handle)
 
 void *channelizer_thread(void *arg)
 {
-    unsigned int i = 0;
+    unsigned int counter = 0;
 
     // Channelizer handle
     channelizer_handle *handle = arg;
@@ -74,13 +74,16 @@ void *channelizer_thread(void *arg)
     // 畳み込み用レジスタ
     static double complex reg[NUM_CHANNELS][COEF_PER_STAGE] = {0};
 
+    // フィルタ出力用
+    double complex filter_output[NUM_CHANNELS] = {0};
+
     // チャネライザ出力用
     static double complex channelizer_out[NUM_CHANNELS][OUTPUT_SAMPS / NUM_CHANNELS] = {0};
 
     // FFTWの入出力配列とプラン
     fftw_complex in[NUM_CHANNELS];
     fftw_complex out[NUM_CHANNELS];
-    fftw_plan plan = fftw_plan_dft_1d(NUM_CHANNELS, in, out, FFTW_BACKWARD, FFTW_ESTIMATE);
+    fftw_plan plan = fftw_plan_dft_1d(NUM_CHANNELS, in, out, FFTW_BACKWARD, FFTW_MEASURE);
 
     while (atomic_load(&running))
     {
@@ -94,6 +97,7 @@ void *channelizer_thread(void *arg)
         // I, Q を複素数に変換
         for (size_t j = 0; j < OUTPUT_SAMPS; ++j)
         {
+            // USRPからの信号はQ0, I0, Q1, I1, ... の順で格納されているはず
             complex_signal[j] = output_buf[2 * j + 1] + output_buf[2 * j] * I;
         }
 
@@ -120,8 +124,8 @@ void *channelizer_thread(void *arg)
                 reg[ch][0] = split_signal[ch][nn];
             }
 
-            // フィルタ出力用
-            double complex filter_output[NUM_CHANNELS] = {0};
+            // フィルタ出力を初期化
+            memset(filter_output, 0, sizeof(filter_output));
 
             // 時間信号とフィルタを畳み込み
             for (size_t mm = 0; mm < NUM_CHANNELS; ++mm)
@@ -149,9 +153,9 @@ void *channelizer_thread(void *arg)
             }
         }
 
-        printf("%d\t%f\t%f\n", i, creal(channelizer_out[0][0]), cimag(channelizer_out[0][0]));
+        printf("%d\t%f\t%f\n", counter, creal(channelizer_out[0][0]), cimag(channelizer_out[0][0]));
 
-        i++;
+        counter++;
     }
 
     // Stop
