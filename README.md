@@ -6,7 +6,7 @@
 
 Install dependencies
 ```
-brew install cmake pkgconf uhd
+brew install cmake pkgconf uhd fftw
 ```
 
 Build (Release)

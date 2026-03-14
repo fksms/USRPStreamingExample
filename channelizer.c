@@ -146,10 +146,10 @@ void *channelizer_thread(void *arg)
             // FFTWを用いてIFFTを実行
             fftw_execute(plan);
 
-            // IFFT結果をchannelizer_outに格納（正規化）
+            // IFFT結果をchannelizer_outに格納
             for (size_t i = 0; i < NUM_CHANNELS; ++i)
             {
-                channelizer_out[i][nn] = out[i] / NUM_CHANNELS;
+                channelizer_out[i][nn] = out[i];
             }
         }
 
