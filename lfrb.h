@@ -13,9 +13,9 @@
  * ---------------------------------------------------------------*/
 #define INPUT_SAMPS 1000
 #define INPUT_ELEMS (INPUT_SAMPS * 2) // 2はIとQの分
-#define OUTPUT_SAMPS 30000
+#define OUTPUT_SAMPS 60000
 #define OUTPUT_ELEMS (OUTPUT_SAMPS * 2) // 2はIとQの分
-#define BUF_ELEM 1048576
+#define BUF_ELEM 2097152                // 2^21
 #define BUF_MASK (BUF_ELEM - 1)
 
 // BUF_ELEMが2の冪乗でない場合はコンパイルエラー
