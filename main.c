@@ -11,7 +11,7 @@
 #include "brb.h"
 #include "lfrb.h"
 #include "usrp.h"
-#include "reader.h"
+#include "channelizer.h"
 
 // ---------------------Status---------------------
 _Atomic bool running = true;
@@ -21,7 +21,7 @@ _Atomic bool running = true;
 // Center frequency
 double freq = 2426e6;
 // Sampling rate
-double rate = 20e6;
+double rate = 10e6;
 // Gain
 double gain = 40.0;
 // Device args (e.g. "type=b200")
@@ -116,6 +116,14 @@ int main(int argc, char *argv[])
         printf("Setup USRP RX failed\n");
         return -1;
     }
+
+    // Setup Channelizer
+    channelizer_handle channelizer;
+    if (channelizer_setup(&channelizer))
+    {
+        printf("Setup channelizer failed\n");
+        return -1;
+    }
     // ------------------------------------------------------------
 
     // -----------------Setting pthread attributes-----------------
@@ -154,12 +162,12 @@ int main(int argc, char *argv[])
 
     // ------------------------Create thread-----------------------
     pthread_t usrpStreamThread;
-    pthread_t readerThread;
+    pthread_t channelizerThread;
 
-    // Create Reader thread
-    if (pthread_create(&readerThread, &attr, reader_thread, NULL))
+    // Create Channelizer thread
+    if (pthread_create(&channelizerThread, &attr, channelizer_thread, (void *)&channelizer))
     {
-        printf("Create reader_thread failed\n");
+        printf("Create channelizer_thread failed\n");
         return -1;
     }
 
@@ -179,10 +187,10 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    // Join Reader thread
-    if (pthread_join(readerThread, NULL))
+    // Join Channelizer thread
+    if (pthread_join(channelizerThread, NULL))
     {
-        printf("Join reader_thread failed\n");
+        printf("Join channelizer_thread failed\n");
         return -1;
     }
     // ------------------------------------------------------------
