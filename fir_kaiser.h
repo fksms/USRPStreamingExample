@@ -3,4 +3,4 @@
 
 void fir_design_kaiser_lowpass(double *h, int N, double fc, double beta);
 
-#endif
+#endif // __FIR_KAISER_H__

@@ -22,4 +22,4 @@ bool brb_write(BlockingRingBuffer *rb, const iq_sample_t *src);
 bool brb_read(BlockingRingBuffer *rb, iq_sample_t *dst);
 void brb_destroy(BlockingRingBuffer *rb);
 
-#endif
+#endif // __BRB_H__

@@ -28,4 +28,4 @@ typedef struct
 int channelizer_setup(channelizer_handle *handle);
 void *channelizer_thread(void *arg);
 
-#endif
+#endif // __CHANNELIZER_H__

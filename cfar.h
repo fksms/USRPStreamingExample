@@ -1,6 +1,5 @@
-#ifndef CFAR_H
-#define CFAR_H
-#include <stddef.h>
+#ifndef __CFAR_H__
+#define __CFAR_H__
 
 // CFAR定義
 #define CFAR_ALPHA 10.0
@@ -9,4 +8,4 @@
 
 void get_sorted_channel_indices(size_t num_channels, size_t *sorted_idx);
 
-#endif // CFAR_H
+#endif // __CFAR_H__

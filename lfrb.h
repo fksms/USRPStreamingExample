@@ -43,4 +43,4 @@ void lfrb_init(LockFreeRingBuffer *rb);
 bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src);
 bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst);
 
-#endif
+#endif // __LFRB_H__

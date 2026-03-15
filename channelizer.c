@@ -190,11 +190,11 @@ void *channelizer_thread(void *arg)
             }
         }
 
-        // レジスタを初期化
-        memset(reg, 0, sizeof(reg));
+        // レジスタを初期化（初期化しなくても良いっぽいので、一旦コメントアウト）
+        // memset(reg, 0, sizeof(reg));
 
-        // チャネライザ出力を初期化
-        memset(channelizer_out, 0, sizeof(channelizer_out));
+        // チャネライザ出力を初期化（そもそも初期化する必要がないためコメントアウト）
+        // memset(channelizer_out, 0, sizeof(channelizer_out));
 
         // 信号電力を初期化
         memset(power, 0, sizeof(power));
@@ -240,7 +240,8 @@ void *channelizer_thread(void *arg)
             for (size_t i = 0; i < NUM_CHANNELS; ++i)
             {
                 channelizer_out[i][nn] = out[i];
-                power[i] += pow(creal(out[i]), 2) + pow(cimag(out[i]), 2);
+                double mag = cabs(out[i]);
+                power[i] += mag * mag;
             }
         }
 
