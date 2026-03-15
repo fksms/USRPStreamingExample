@@ -110,7 +110,13 @@ void *channelizer_thread(void *arg)
             }
         }
 
-        // Polyphase channelizer 処理
+        // レジスタを初期化
+        memset(reg, 0, sizeof(reg));
+
+        // チャネライザ出力を初期化
+        memset(channelizer_out, 0, sizeof(channelizer_out));
+
+        // チャネライザ処理
         for (size_t nn = 0; nn < OUTPUT_SAMPS / NUM_CHANNELS; ++nn)
         {
             // レジスタを右向きにシフト
