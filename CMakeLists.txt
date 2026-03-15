@@ -25,7 +25,7 @@ find_package(FFTW REQUIRED)
 #find_package(Liquid REQUIRED)
 
 # 実行ファイルを作成
-add_executable(${PROJECT_NAME} main.c usrp.c lfrb.c channelizer.c fir_kaiser.c)
+add_executable(${PROJECT_NAME} main.c usrp.c lfrb.c channelizer.c fir_kaiser.c cfar.c)
 
 # インクルードするディレクトリの設定
 target_include_directories(${PROJECT_NAME} PRIVATE

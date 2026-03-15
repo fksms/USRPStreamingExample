@@ -12,6 +12,8 @@
 #define COEF_PER_STAGE 13
 #define KAISER_BETA 8.6
 
+#define TIME_SLOTS (OUTPUT_SAMPS / NUM_CHANNELS)
+
 // OUTPUT_SAMPSがNUM_CHANNELSの倍数でない場合はコンパイルエラー
 #if (OUTPUT_SAMPS % NUM_CHANNELS) != 0
 #error "OUTPUT_SAMPS must be a multiple of NUM_CHANNELS"

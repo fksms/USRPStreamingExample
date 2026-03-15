@@ -23,7 +23,7 @@ double freq = 924e6;
 // Sampling rate
 double rate = 10e6;
 // Gain
-double gain = 40.0;
+double gain = 30.0;
 // Device args (e.g. "type=b200")
 char *device_args = "";
 // Channel (0 or 1)

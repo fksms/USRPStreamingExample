@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdatomic.h>
 #include <complex.h>
+#include <math.h>
 
 #include <fftw3.h>
 
@@ -11,6 +12,7 @@
 #include "lfrb.h"
 #include "channelizer.h"
 #include "fir_kaiser.h"
+#include "cfar.h"
 
 // ---------------------Status---------------------
 extern _Atomic bool running;
@@ -48,7 +50,7 @@ int channelizer_setup(channelizer_handle *handle)
 
 void *channelizer_thread(void *arg)
 {
-    unsigned int counter = 0;
+    // unsigned int counter = 0;
 
     // Channelizer handle
     channelizer_handle *handle = arg;
@@ -62,11 +64,13 @@ void *channelizer_thread(void *arg)
     // リングバッファから読み取った信号を格納するためのバッファ
     static iq_sample_t output_buf[OUTPUT_ELEMS];
 
+    /* ---------------------- ここからチャネライザ用変数 ---------------------- */
+
     // 複素信号を格納するためのバッファ
     static double complex complex_signal[OUTPUT_SAMPS];
 
     // 分解した信号を格納するためのバッファ
-    static double complex split_signal[NUM_CHANNELS][OUTPUT_SAMPS / NUM_CHANNELS];
+    static double complex split_signal[NUM_CHANNELS][TIME_SLOTS];
 
     // 分割されたFIRフィルタ係数へのポインタ
     double (*split_filter)[COEF_PER_STAGE] = handle->split_filter;
@@ -76,6 +80,11 @@ void *channelizer_thread(void *arg)
 
     // フィルタ出力用
     double complex filter_output[NUM_CHANNELS] = {0};
+
+    // FFTWの入出力配列とプラン
+    fftw_complex in[NUM_CHANNELS];
+    fftw_complex out[NUM_CHANNELS];
+    fftw_plan plan = fftw_plan_dft_1d(NUM_CHANNELS, in, out, FFTW_BACKWARD, FFTW_MEASURE);
 
     // チャネライザ出力用
     //
@@ -131,12 +140,30 @@ void *channelizer_thread(void *arg)
     // 周波数順に並べると以下のようなイメージ：
     //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
     //
-    static double complex channelizer_out[NUM_CHANNELS][OUTPUT_SAMPS / NUM_CHANNELS] = {0};
+    static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS] = {0};
 
-    // FFTWの入出力配列とプラン
-    fftw_complex in[NUM_CHANNELS];
-    fftw_complex out[NUM_CHANNELS];
-    fftw_plan plan = fftw_plan_dft_1d(NUM_CHANNELS, in, out, FFTW_BACKWARD, FFTW_MEASURE);
+    /* ---------------------- ここまでチャネライザ用変数 ---------------------- */
+
+    /* ---------------------- ここからCFAR用変数 ---------------------- */
+
+    // 各チャンネルの信号の電力を格納するバッファ
+    double power[NUM_CHANNELS] = {0};
+
+    // チャネル順並び替え用配列
+    // （channelizer_out の周波数配置は上記のコメントのようになっているので、周波数順に並び替えるためのインデックス配列を定義）
+    size_t sorted_idx[NUM_CHANNELS];
+    get_sorted_channel_indices(NUM_CHANNELS, sorted_idx);
+
+    // CFARを実施するチャネル数
+    // （偶数チャネルの場合は折り返し点を除外する）
+    size_t sorted_len = NUM_CHANNELS;
+    if (NUM_CHANNELS % 2 == 0)
+        sorted_len--; // 偶数時は折り返し点除外
+
+    // CFAR判定結果格納用
+    bool cfar_result[NUM_CHANNELS] = {0};
+
+    /* ---------------------- ここまでCFAR用変数 ---------------------- */
 
     while (atomic_load(&running))
     {
@@ -157,7 +184,7 @@ void *channelizer_thread(void *arg)
         // チャンネルごとに信号を分割
         for (size_t ch = 0; ch < NUM_CHANNELS; ++ch)
         {
-            for (size_t j = 0; j < OUTPUT_SAMPS / NUM_CHANNELS; ++j)
+            for (size_t j = 0; j < TIME_SLOTS; ++j)
             {
                 split_signal[ch][j] = complex_signal[j * NUM_CHANNELS + ch];
             }
@@ -169,8 +196,11 @@ void *channelizer_thread(void *arg)
         // チャネライザ出力を初期化
         memset(channelizer_out, 0, sizeof(channelizer_out));
 
+        // 信号電力を初期化
+        memset(power, 0, sizeof(power));
+
         // チャネライザ処理
-        for (size_t nn = 0; nn < OUTPUT_SAMPS / NUM_CHANNELS; ++nn)
+        for (size_t nn = 0; nn < TIME_SLOTS; ++nn)
         {
             // レジスタを右向きにシフト
             for (size_t ch = 0; ch < NUM_CHANNELS; ++ch)
@@ -206,15 +236,91 @@ void *channelizer_thread(void *arg)
             fftw_execute(plan);
 
             // IFFT結果をchannelizer_outに格納
+            // （信号の電力も同時に計算する）
             for (size_t i = 0; i < NUM_CHANNELS; ++i)
             {
                 channelizer_out[i][nn] = out[i];
+                power[i] += pow(creal(out[i]), 2) + pow(cimag(out[i]), 2);
             }
         }
 
-        printf("%d\t%f\t%f\n", counter, creal(channelizer_out[0][0]), cimag(channelizer_out[0][0]));
+        // ---------------------- CFAR処理 ----------------------
+        // 概要：
+        // 各チャネルの信号電力（power）に対して、周波数順に並び替えた配列(sorted_idx)を用いてCFAR判定を行う。
+        // CFARは、CUT（判定対象チャネル）の両側にGUARD領域を設け、その外側のTRAIN領域の平均電力を基準とし、
+        // CUTの電力がα倍を超えていれば検出とする。
+        //
+        // 両側CFAR条件（NUM_CHANNELS=20, GUARD=1, TRAIN=2）：
+        //   ...
+        //   ch[7]   [TRAIN]
+        //   ch[8]   [TRAIN]
+        //   ch[9]   [GUARD]
+        //   ch[10]  [CUT]
+        //   ch[11]  [GUARD]
+        //   ch[12]  [TRAIN]
+        //   ch[13]  [TRAIN]
+        //   ...
+        //
+        // 片側CFAR条件（NUM_CHANNELS=20, GUARD=1, TRAIN=2）：
+        //   ch[0]   [GUARD]
+        //   ch[1]   [CUT]
+        //   ch[2]   [GUARD]
+        //   ch[3]   [TRAIN]
+        //   ch[4]   [TRAIN]
+        //   ...
+        //
+        // ※偶数チャネルの場合は折り返し点（両端重なりチャネル）はCFAR判定対象外。
+        //
+        // 判定結果はcfar_resultに格納。
+        // ------------------------------------------------------
+        for (size_t idx = 0; idx < sorted_len; ++idx)
+        {
+            size_t CUT = sorted_idx[idx];
+            // TRAIN/GAURD領域の両側インデックス
+            int left_start = (int)idx - CFAR_GUARD - CFAR_TRAIN;
+            int left_end = (int)idx - CFAR_GUARD - 1;
+            int right_start = (int)idx + CFAR_GUARD + 1;
+            int right_end = (int)idx + CFAR_GUARD + CFAR_TRAIN;
 
-        counter++;
+            double train_sum = 0.0;
+            int train_count = 0;
+
+            // 左側TRAIN
+            if (left_start >= 0)
+            {
+                for (int i = left_start; i <= left_end && i >= 0; ++i)
+                {
+                    // 左側の電力を加算
+                    train_sum += power[sorted_idx[i]];
+                    train_count++;
+                }
+            }
+            // 右側TRAIN
+            if (right_end < (int)sorted_len)
+            {
+                for (int i = right_start; i <= right_end && i < (int)sorted_len; ++i)
+                {
+                    // 右側の電力を加算
+                    train_sum += power[sorted_idx[i]];
+                    train_count++;
+                }
+            }
+            // TRAINが片側しかない場合も対応
+            double train_mean = (train_count > 0) ? (train_sum / train_count) : 0.0;
+            // CFAR判定
+            cfar_result[CUT] = (power[CUT] > CFAR_ALPHA * train_mean);
+
+            // テスト出力
+            if (cfar_result[CUT])
+            {
+                // CUTが検出された場合の処理（例：ログ出力）
+                printf("CFAR Detection: Channel %zu\n", CUT);
+            }
+        }
+
+        // printf("%d\t%f\t%f\n", counter, power[0], power[1]);
+
+        // counter++;
     }
 
     // Stop
