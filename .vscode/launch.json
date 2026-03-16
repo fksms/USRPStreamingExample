@@ -1,20 +1,14 @@
 {
-    // IntelliSense を使用して利用可能な属性を学べます。
-    // 既存の属性の説明をホバーして表示します。
-    // 詳細情報は次を確認してください: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(lldb) Launch",
-            "type": "cppdbg",
+            "type": "lldb-dap",
             "request": "launch",
-            "program": "${fileDirname}/build/usrp_streaming_test",
+            "name": "Launch",
+            "program": "${workspaceFolder}/build/usrp_streaming_test",
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": true,
-            "MIMode": "lldb"
+            "env": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
