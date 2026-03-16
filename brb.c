@@ -1,8 +1,7 @@
 #include "brb.h"
 
 // 初期化
-void brb_init(BlockingRingBuffer *rb)
-{
+void brb_init(BlockingRingBuffer *rb) {
     rb->write_pos = 0;
     rb->read_pos = 0;
     pthread_mutex_init(&rb->mutex, NULL);
@@ -11,21 +10,16 @@ void brb_init(BlockingRingBuffer *rb)
 }
 
 // ブロッキング書き込み
-bool brb_write(BlockingRingBuffer *rb, const iq_sample_t *src)
-{
+bool brb_write(BlockingRingBuffer *rb, const iq_sample_t *src) {
     pthread_mutex_lock(&rb->mutex);
-    while (rb->write_pos - rb->read_pos + INPUT_ELEMS > BUF_ELEM)
-    {
+    while (rb->write_pos - rb->read_pos + INPUT_ELEMS > BUF_ELEM) {
         pthread_cond_wait(&rb->not_full, &rb->mutex);
     }
     uint32_t wi = rb->write_pos & BUF_MASK;
     uint32_t tail = BUF_ELEM - wi;
-    if (tail >= INPUT_ELEMS)
-    {
+    if (tail >= INPUT_ELEMS) {
         memcpy(&rb->buf[wi], src, INPUT_ELEMS * sizeof(iq_sample_t));
-    }
-    else
-    {
+    } else {
         memcpy(&rb->buf[wi], src, tail * sizeof(iq_sample_t));
         memcpy(&rb->buf[0], src + tail, (INPUT_ELEMS - tail) * sizeof(iq_sample_t));
     }
@@ -36,21 +30,16 @@ bool brb_write(BlockingRingBuffer *rb, const iq_sample_t *src)
 }
 
 // ブロッキング読み出し
-bool brb_read(BlockingRingBuffer *rb, iq_sample_t *dst)
-{
+bool brb_read(BlockingRingBuffer *rb, iq_sample_t *dst) {
     pthread_mutex_lock(&rb->mutex);
-    while (rb->write_pos - rb->read_pos < OUTPUT_ELEMS)
-    {
+    while (rb->write_pos - rb->read_pos < OUTPUT_ELEMS) {
         pthread_cond_wait(&rb->not_empty, &rb->mutex);
     }
     uint32_t ri = rb->read_pos & BUF_MASK;
     uint32_t tail = BUF_ELEM - ri;
-    if (tail >= OUTPUT_ELEMS)
-    {
+    if (tail >= OUTPUT_ELEMS) {
         memcpy(dst, &rb->buf[ri], OUTPUT_ELEMS * sizeof(iq_sample_t));
-    }
-    else
-    {
+    } else {
         memcpy(dst, &rb->buf[ri], tail * sizeof(iq_sample_t));
         memcpy(dst + tail, &rb->buf[0], (OUTPUT_ELEMS - tail) * sizeof(iq_sample_t));
     }
@@ -61,8 +50,7 @@ bool brb_read(BlockingRingBuffer *rb, iq_sample_t *dst)
 }
 
 // リソースの解放
-void brb_destroy(BlockingRingBuffer *rb)
-{
+void brb_destroy(BlockingRingBuffer *rb) {
     pthread_mutex_destroy(&rb->mutex);
     pthread_cond_destroy(&rb->not_empty);
     pthread_cond_destroy(&rb->not_full);

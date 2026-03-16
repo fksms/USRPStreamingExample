@@ -10,6 +10,8 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 
+.cache
+
 build
 
 .DS_Store

@@ -1,14 +1,13 @@
 #ifndef __BRB_H__
 #define __BRB_H__
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <pthread.h>
 #include "lfrb.h"
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 // ブロッキングリングバッファ構造体
-typedef struct
-{
+typedef struct {
     iq_sample_t buf[BUF_ELEM];
     uint32_t write_pos;
     uint32_t read_pos;

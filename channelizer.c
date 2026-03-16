@@ -1,18 +1,17 @@
+#include <complex.h>
+#include <stdatomic.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdatomic.h>
-#include <complex.h>
-#include <math.h>
+#include <time.h>
 
 #include <fftw3.h>
 
-#include "brb.h"
-#include "lfrb.h"
+#include "cfar.h"
 #include "channelizer.h"
 #include "fir_kaiser.h"
-#include "cfar.h"
+#include "lfrb.h"
 
 // ---------------------Status---------------------
 extern _Atomic bool running;
@@ -24,10 +23,9 @@ extern double rate;
 extern LockFreeRingBuffer rb;
 // ------------------------------------------------
 
-int channelizer_setup(channelizer_handle *handle)
-{
+int channelizer_setup(channelizer_handle *handle) {
     // 分割されたFIRフィルタ係数へのポインタ
-    double (*split_filter)[COEF_PER_STAGE] = handle->split_filter;
+    double(*split_filter)[COEF_PER_STAGE] = handle->split_filter;
 
     // FIRフィルタのタップ数
     int order = COEF_PER_STAGE * NUM_CHANNELS;
@@ -37,10 +35,8 @@ int channelizer_setup(channelizer_handle *handle)
     fir_design_kaiser_lowpass(filter_coef, order, 1.0 / NUM_CHANNELS, KAISER_BETA);
 
     // FIRフィルタ係数をチャンネルごとに分割
-    for (size_t ch = 0; ch < NUM_CHANNELS; ++ch)
-    {
-        for (size_t j = 0; j < COEF_PER_STAGE; ++j)
-        {
+    for (size_t ch = 0; ch < NUM_CHANNELS; ++ch) {
+        for (size_t j = 0; j < COEF_PER_STAGE; ++j) {
             split_filter[ch][j] = filter_coef[j * NUM_CHANNELS + ch];
         }
     }
@@ -48,8 +44,7 @@ int channelizer_setup(channelizer_handle *handle)
     return 0;
 }
 
-void *channelizer_thread(void *arg)
-{
+void *channelizer_thread(void *arg) {
     // unsigned int counter = 0;
 
     // Channelizer handle
@@ -73,7 +68,7 @@ void *channelizer_thread(void *arg)
     static double complex split_signal[NUM_CHANNELS][TIME_SLOTS];
 
     // 分割されたFIRフィルタ係数へのポインタ
-    double (*split_filter)[COEF_PER_STAGE] = handle->split_filter;
+    double(*split_filter)[COEF_PER_STAGE] = handle->split_filter;
 
     // 畳み込み用レジスタ
     static double complex reg[NUM_CHANNELS][COEF_PER_STAGE] = {0};
@@ -165,27 +160,22 @@ void *channelizer_thread(void *arg)
 
     /* ---------------------- ここまでCFAR用変数 ---------------------- */
 
-    while (atomic_load(&running))
-    {
-        if (!lfrb_read(&rb, output_buf))
-        {
+    while (atomic_load(&running)) {
+        if (!lfrb_read(&rb, output_buf)) {
             // バッファ空の場合
             nanosleep(&ts, NULL);
             continue;
         }
 
         // I, Q を複素数に変換
-        for (size_t j = 0; j < OUTPUT_SAMPS; ++j)
-        {
+        for (size_t j = 0; j < OUTPUT_SAMPS; ++j) {
             // USRPからの信号はQ0, I0, Q1, I1, ... の順で格納されているはず
             complex_signal[j] = output_buf[2 * j + 1] + output_buf[2 * j] * I;
         }
 
         // チャンネルごとに信号を分割
-        for (size_t ch = 0; ch < NUM_CHANNELS; ++ch)
-        {
-            for (size_t j = 0; j < TIME_SLOTS; ++j)
-            {
+        for (size_t ch = 0; ch < NUM_CHANNELS; ++ch) {
+            for (size_t j = 0; j < TIME_SLOTS; ++j) {
                 split_signal[ch][j] = complex_signal[j * NUM_CHANNELS + ch];
             }
         }
@@ -200,13 +190,10 @@ void *channelizer_thread(void *arg)
         memset(power, 0, sizeof(power));
 
         // チャネライザ処理
-        for (size_t nn = 0; nn < TIME_SLOTS; ++nn)
-        {
+        for (size_t nn = 0; nn < TIME_SLOTS; ++nn) {
             // レジスタを右向きにシフト
-            for (size_t ch = 0; ch < NUM_CHANNELS; ++ch)
-            {
-                for (size_t k = COEF_PER_STAGE - 1; k > 0; --k)
-                {
+            for (size_t ch = 0; ch < NUM_CHANNELS; ++ch) {
+                for (size_t k = COEF_PER_STAGE - 1; k > 0; --k) {
                     reg[ch][k] = reg[ch][k - 1];
                 }
                 // レジスタの最左列に信号を1つずつ代入
@@ -217,18 +204,15 @@ void *channelizer_thread(void *arg)
             memset(filter_output, 0, sizeof(filter_output));
 
             // 時間信号とフィルタを畳み込み
-            for (size_t mm = 0; mm < NUM_CHANNELS; ++mm)
-            {
+            for (size_t mm = 0; mm < NUM_CHANNELS; ++mm) {
                 // reg[mm, ::-1]とsplit_filter[mm, :]の内積
-                for (size_t kk = 0; kk < COEF_PER_STAGE; ++kk)
-                {
+                for (size_t kk = 0; kk < COEF_PER_STAGE; ++kk) {
                     filter_output[NUM_CHANNELS - mm - 1] += reg[mm][COEF_PER_STAGE - kk - 1] * split_filter[mm][kk];
                 }
             }
 
             // filter_outputをinにコピー
-            for (size_t i = 0; i < NUM_CHANNELS; ++i)
-            {
+            for (size_t i = 0; i < NUM_CHANNELS; ++i) {
                 in[i] = filter_output[i];
             }
 
@@ -237,8 +221,7 @@ void *channelizer_thread(void *arg)
 
             // IFFT結果をchannelizer_outに格納
             // （信号の電力も同時に計算する）
-            for (size_t i = 0; i < NUM_CHANNELS; ++i)
-            {
+            for (size_t i = 0; i < NUM_CHANNELS; ++i) {
                 channelizer_out[i][nn] = out[i];
                 double mag = cabs(out[i]);
                 power[i] += mag * mag;
@@ -274,8 +257,7 @@ void *channelizer_thread(void *arg)
         //
         // 判定結果はcfar_resultに格納。
         // ------------------------------------------------------
-        for (size_t idx = 0; idx < sorted_len; ++idx)
-        {
+        for (size_t idx = 0; idx < sorted_len; ++idx) {
             size_t CUT = sorted_idx[idx];
             // TRAIN/GAURD領域の両側インデックス
             int left_start = (int)idx - CFAR_GUARD - CFAR_TRAIN;
@@ -287,20 +269,16 @@ void *channelizer_thread(void *arg)
             int train_count = 0;
 
             // 左側TRAIN
-            if (left_start >= 0)
-            {
-                for (int i = left_start; i <= left_end && i >= 0; ++i)
-                {
+            if (left_start >= 0) {
+                for (int i = left_start; i <= left_end && i >= 0; ++i) {
                     // 左側の電力を加算
                     train_sum += power[sorted_idx[i]];
                     train_count++;
                 }
             }
             // 右側TRAIN
-            if (right_end < (int)sorted_len)
-            {
-                for (int i = right_start; i <= right_end && i < (int)sorted_len; ++i)
-                {
+            if (right_end < (int)sorted_len) {
+                for (int i = right_start; i <= right_end && i < (int)sorted_len; ++i) {
                     // 右側の電力を加算
                     train_sum += power[sorted_idx[i]];
                     train_count++;
@@ -312,8 +290,7 @@ void *channelizer_thread(void *arg)
             cfar_result[CUT] = (power[CUT] > CFAR_ALPHA * train_mean);
 
             // テスト出力
-            if (cfar_result[CUT])
-            {
+            if (cfar_result[CUT]) {
                 // CUTが検出された場合の処理（例：ログ出力）
                 printf("CFAR Detection: Channel %zu\n", CUT);
             }
@@ -333,7 +310,4 @@ void *channelizer_thread(void *arg)
     return NULL;
 }
 
-int channelizer_close(void)
-{
-    return 0;
-}
+int channelizer_close(void) { return 0; }

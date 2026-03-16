@@ -19,8 +19,7 @@
 #error "OUTPUT_SAMPS must be a multiple of NUM_CHANNELS"
 #endif
 
-typedef struct
-{
+typedef struct {
     // 分割されたFIRフィルタ係数
     double split_filter[NUM_CHANNELS][COEF_PER_STAGE];
 } channelizer_handle;

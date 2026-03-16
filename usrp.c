@@ -1,12 +1,11 @@
+#include <stdatomic.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdatomic.h>
 
 #include <uhd.h>
 
-#include "brb.h"
 #include "lfrb.h"
 #include "usrp.h"
 
@@ -26,15 +25,13 @@ extern size_t num_samps_per_once;
 extern LockFreeRingBuffer rb;
 // ------------------------------------------------
 
-int usrp_setup(uhd_usrp_handle *usrp)
-{
+int usrp_setup(uhd_usrp_handle *usrp) {
     // UHD error codes
     uhd_error error;
 
     // Create USRP
     error = uhd_usrp_make(usrp, device_args);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
@@ -42,8 +39,7 @@ int usrp_setup(uhd_usrp_handle *usrp)
     return 0;
 }
 
-int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
-{
+int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
     // USRP handle
     uhd_usrp_handle usrp = usrp_rx->usrp;
 
@@ -60,16 +56,14 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
 
     // Set RX antenna
     error = uhd_usrp_set_rx_antenna(usrp, antenna, channel);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set rate
     error = uhd_usrp_set_rx_rate(usrp, rate, channel);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
@@ -77,16 +71,14 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
     // See what rate actually is
     error = uhd_usrp_get_rx_rate(usrp, channel, &rate);
     printf("Actual RX Rate: %f Sps...\n", rate);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set gain
     error = uhd_usrp_set_rx_gain(usrp, gain, channel, "");
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
@@ -94,16 +86,14 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
     // See what rate actually is
     error = uhd_usrp_get_rx_gain(usrp, channel, "", &gain);
     printf("Actual RX Gain: %f dB...\n", gain);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set frequency
     error = uhd_usrp_set_rx_freq(usrp, &tune_request, channel, &tune_result);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
@@ -111,19 +101,13 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
     // See what rate actually is
     error = uhd_usrp_get_rx_freq(usrp, channel, &freq);
     printf("Actual RX frequency: %f Hz...\n", freq);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Specify complex<int16_t> as the CPU format.
-    uhd_stream_args_t stream_args = {
-        .cpu_format = "sc16",
-        .otw_format = "sc16",
-        .args = "",
-        .channel_list = &channel,
-        .n_channels = 1};
+    uhd_stream_args_t stream_args = {.cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &channel, .n_channels = 1};
 
     // Define how device streams to host
     uhd_stream_cmd_t stream_cmd = {
@@ -133,32 +117,28 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
 
     // Create RX streamer
     error = uhd_rx_streamer_make(&usrp_rx->rx_streamer);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Create RX metadata
     error = uhd_rx_metadata_make(&usrp_rx->rx_metadata);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set up streamer
     error = uhd_usrp_get_rx_stream(usrp, &stream_args, usrp_rx->rx_streamer);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Issue stream command
     error = uhd_rx_streamer_issue_stream_cmd(usrp_rx->rx_streamer, &stream_cmd);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
@@ -166,8 +146,7 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx)
     return 0;
 }
 
-void *usrp_stream_thread(void *arg)
-{
+void *usrp_stream_thread(void *arg) {
     // USRP RX handle
     uhd_usrp_rx_handle *usrp_rx = arg;
 
@@ -184,14 +163,12 @@ void *usrp_stream_thread(void *arg)
     void *buf_ptrs[1] = {recv_buf};
 
     // Actual streaming
-    while (atomic_load(&running))
-    {
+    while (atomic_load(&running)) {
         // ストリームを受信
         uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, num_samps_per_once, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
 
         // 受信サンプル数が想定と異なる場合
-        if (actual_num_samps != INPUT_SAMPS)
-        {
+        if (actual_num_samps != INPUT_SAMPS) {
             // エラー有りの場合は解放して終了
             printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
             break;
@@ -202,8 +179,7 @@ void *usrp_stream_thread(void *arg)
             // continue;
         }
 
-        if (!lfrb_write(&rb, recv_buf))
-        {
+        if (!lfrb_write(&rb, recv_buf)) {
             // バッファ溢れの場合
             printf("Ring buffer overflow.\n");
             break;
@@ -216,8 +192,7 @@ void *usrp_stream_thread(void *arg)
     return NULL;
 }
 
-int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx)
-{
+int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx) {
     // UHD error codes
     uhd_error error;
 
@@ -229,24 +204,21 @@ int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx)
 
     // Issue stream command
     error = uhd_rx_streamer_issue_stream_cmd(usrp_rx->rx_streamer, &stream_cmd);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Cleaning up RX streamer
     error = uhd_rx_streamer_free(&usrp_rx->rx_streamer);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Cleaning up RX metadata
     error = uhd_rx_metadata_free(&usrp_rx->rx_metadata);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }
@@ -254,15 +226,13 @@ int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx)
     return 0;
 }
 
-int usrp_close(uhd_usrp_handle usrp)
-{
+int usrp_close(uhd_usrp_handle usrp) {
     // UHD error codes
     uhd_error error;
 
     // Cleaning up USRP
     error = uhd_usrp_free(&usrp);
-    if (error)
-    {
+    if (error) {
         printf("%u\n", error);
         return error;
     }

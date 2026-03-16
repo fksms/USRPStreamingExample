@@ -1,13 +1,12 @@
 #ifndef __USRP_H__
 #define __USRP_H__
 
-#include <uhd.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <uhd.h>
 
 // USRP RX handle
-typedef struct
-{
+typedef struct {
     // USRP handle
     uhd_usrp_handle usrp;
     // RX streamer handle

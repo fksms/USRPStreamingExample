@@ -1,14 +1,13 @@
-#include <stdint.h>
-#include <stdbool.h>
 #include <stdatomic.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include "lfrb.h"
 
 /* ---------------------------------------------------------------
  * 初期化
  * ---------------------------------------------------------------*/
-void lfrb_init(LockFreeRingBuffer *rb)
-{
+void lfrb_init(LockFreeRingBuffer *rb) {
     atomic_store_explicit(&rb->write_pos, 0, memory_order_relaxed);
     atomic_store_explicit(&rb->read_pos, 0, memory_order_relaxed);
 }
@@ -24,8 +23,7 @@ void lfrb_init(LockFreeRingBuffer *rb)
  * release ストアにより、buf[]への書き込みが
  * write_pos の更新より先に他スレッドから見えることが保証される。
  * ---------------------------------------------------------------*/
-bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src)
-{
+bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src) {
     uint32_t wp = atomic_load_explicit(&rb->write_pos, memory_order_relaxed);
     uint32_t rp = atomic_load_explicit(&rb->read_pos, memory_order_acquire);
 
@@ -36,12 +34,9 @@ bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src)
     uint32_t wi = wp & BUF_MASK;
     uint32_t tail = BUF_ELEM - wi;
 
-    if (tail >= INPUT_ELEMS)
-    {
+    if (tail >= INPUT_ELEMS) {
         memcpy(&rb->buf[wi], src, INPUT_ELEMS * sizeof(iq_sample_t));
-    }
-    else
-    {
+    } else {
         memcpy(&rb->buf[wi], src, tail * sizeof(iq_sample_t));
         memcpy(&rb->buf[0], src + tail, (INPUT_ELEMS - tail) * sizeof(iq_sample_t));
     }
@@ -59,8 +54,7 @@ bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src)
  *   2. buf[] からデータをコピー
  *   3. read_pos を release ストア
  * ---------------------------------------------------------------*/
-bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst)
-{
+bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst) {
     uint32_t rp = atomic_load_explicit(&rb->read_pos, memory_order_relaxed);
     uint32_t wp = atomic_load_explicit(&rb->write_pos, memory_order_acquire);
 
@@ -71,12 +65,9 @@ bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst)
     uint32_t ri = rp & BUF_MASK;
     uint32_t tail = BUF_ELEM - ri;
 
-    if (tail >= OUTPUT_ELEMS)
-    {
+    if (tail >= OUTPUT_ELEMS) {
         memcpy(dst, &rb->buf[ri], OUTPUT_ELEMS * sizeof(iq_sample_t));
-    }
-    else
-    {
+    } else {
         memcpy(dst, &rb->buf[ri], tail * sizeof(iq_sample_t));
         memcpy(dst + tail, &rb->buf[0], (OUTPUT_ELEMS - tail) * sizeof(iq_sample_t));
     }

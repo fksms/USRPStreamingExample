@@ -1,10 +1,10 @@
 #ifndef __LFRB_H__
 #define __LFRB_H__
 
+#include <stdatomic.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdbool.h>
-#include <stdatomic.h>
 
 /* ---------------------------------------------------------------
  * INPUT_SAMPS: writerスレッドが1回で書き込むサンプル数
@@ -30,8 +30,7 @@ typedef int16_t iq_sample_t; /* I, Q が交互に並ぶ生配列 */
  * write_pos と read_pos を _Atomic にするだけで SPSC ロックフリー化できる。
  * キャッシュライン分離 (64バイト境界) でフォルス・シェアリングを防ぐ。
  * ---------------------------------------------------------------*/
-typedef struct
-{
+typedef struct {
     iq_sample_t buf[BUF_ELEM];
     /* 書き込みスレッドのみが更新する */
     _Alignas(64) _Atomic uint32_t write_pos;
