@@ -111,12 +111,6 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
     // Specify complex<int16_t> as the CPU format.
     uhd_stream_args_t stream_args = {.cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &rx_channel, .n_channels = 1};
 
-    // Define how device streams to host
-    uhd_stream_cmd_t stream_cmd = {
-        .stream_mode = UHD_STREAM_MODE_START_CONTINUOUS,
-        .stream_now = 1,
-    };
-
     // Create RX streamer
     error = uhd_rx_streamer_make(&usrp_rx->rx_streamer);
     if (error) {
@@ -138,13 +132,6 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
         return error;
     }
 
-    // Issue stream command
-    error = uhd_rx_streamer_issue_stream_cmd(usrp_rx->rx_streamer, &stream_cmd);
-    if (error) {
-        printf("%u\n", error);
-        return error;
-    }
-
     return 0;
 }
 
@@ -161,8 +148,15 @@ void *usrp_rx_thread(void *arg) {
     // ストリーミングデータを格納するためのバッファ
     static iq_sample_t recv_buf[INPUT_ELEMS];
 
-    /* UHD は void* の配列を受け取る */
+    // UHD は void* の配列を受け取る
     void *buf_ptrs[1] = {recv_buf};
+
+    // Issue stream command to start streaming
+    uhd_stream_cmd_t stream_cmd = {
+        .stream_mode = UHD_STREAM_MODE_START_CONTINUOUS,
+        .stream_now = 1,
+    };
+    uhd_rx_streamer_issue_stream_cmd(usrp_rx->rx_streamer, &stream_cmd);
 
     // Actual streaming
     while (atomic_load(&running)) {
@@ -188,6 +182,10 @@ void *usrp_rx_thread(void *arg) {
         }
     }
 
+    // Issue stream command to stop streaming
+    stream_cmd.stream_mode = UHD_STREAM_MODE_STOP_CONTINUOUS;
+    uhd_rx_streamer_issue_stream_cmd(usrp_rx->rx_streamer, &stream_cmd);
+
     // Stop
     atomic_store(&running, false);
 
@@ -197,19 +195,6 @@ void *usrp_rx_thread(void *arg) {
 int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx) {
     // UHD error codes
     uhd_error error;
-
-    // Define how device streams to host
-    uhd_stream_cmd_t stream_cmd = {
-        .stream_mode = UHD_STREAM_MODE_STOP_CONTINUOUS,
-        .stream_now = 1,
-    };
-
-    // Issue stream command
-    error = uhd_rx_streamer_issue_stream_cmd(usrp_rx->rx_streamer, &stream_cmd);
-    if (error) {
-        printf("%u\n", error);
-        return error;
-    }
 
     // Cleaning up RX streamer
     error = uhd_rx_streamer_free(&usrp_rx->rx_streamer);
