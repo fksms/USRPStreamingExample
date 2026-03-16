@@ -17,7 +17,7 @@ typedef struct {
 
 int usrp_setup(uhd_usrp_handle *usrp);
 int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx);
-void *usrp_stream_thread(void *arg);
+void *usrp_rx_thread(void *arg);
 int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx);
 int usrp_close(uhd_usrp_handle usrp);
 

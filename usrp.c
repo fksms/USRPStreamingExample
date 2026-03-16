@@ -13,14 +13,16 @@
 extern _Atomic bool running;
 // ------------------------------------------------
 
-// ---------------For USRP Streaming---------------
-extern double freq;
-extern double rate;
-extern double gain;
+// --------------------For USRP--------------------
 extern char *device_args;
-extern size_t channel;
-extern char *antenna;
-extern size_t num_samps_per_once;
+// ------------------------------------------------
+
+// ------------------For USRP RX-------------------
+extern double rx_freq;
+extern double rx_rate;
+extern double rx_gain;
+extern size_t rx_channel;
+extern char *rx_antenna;
 
 extern LockFreeRingBuffer rb;
 // ------------------------------------------------
@@ -48,66 +50,66 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
 
     // Create other necessary structs
     uhd_tune_request_t tune_request = {
-        .target_freq = freq,
+        .target_freq = rx_freq,
         .rf_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
         .dsp_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
     };
     uhd_tune_result_t tune_result;
 
-    // Set RX antenna
-    error = uhd_usrp_set_rx_antenna(usrp, antenna, channel);
+    // Set antenna
+    error = uhd_usrp_set_rx_antenna(usrp, rx_antenna, rx_channel);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set rate
-    error = uhd_usrp_set_rx_rate(usrp, rate, channel);
+    error = uhd_usrp_set_rx_rate(usrp, rx_rate, rx_channel);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // See what rate actually is
-    error = uhd_usrp_get_rx_rate(usrp, channel, &rate);
-    printf("Actual RX Rate: %f Sps...\n", rate);
+    error = uhd_usrp_get_rx_rate(usrp, rx_channel, &rx_rate);
+    printf("Actual RX rate: %f Sps...\n", rx_rate);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set gain
-    error = uhd_usrp_set_rx_gain(usrp, gain, channel, "");
+    error = uhd_usrp_set_rx_gain(usrp, rx_gain, rx_channel, "");
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
-    // See what rate actually is
-    error = uhd_usrp_get_rx_gain(usrp, channel, "", &gain);
-    printf("Actual RX Gain: %f dB...\n", gain);
+    // See what gain actually is
+    error = uhd_usrp_get_rx_gain(usrp, rx_channel, "", &rx_gain);
+    printf("Actual RX gain: %f dB...\n", rx_gain);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set frequency
-    error = uhd_usrp_set_rx_freq(usrp, &tune_request, channel, &tune_result);
+    error = uhd_usrp_set_rx_freq(usrp, &tune_request, rx_channel, &tune_result);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
-    // See what rate actually is
-    error = uhd_usrp_get_rx_freq(usrp, channel, &freq);
-    printf("Actual RX frequency: %f Hz...\n", freq);
+    // See what frequency actually is
+    error = uhd_usrp_get_rx_freq(usrp, rx_channel, &rx_freq);
+    printf("Actual RX frequency: %f Hz...\n", rx_freq);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Specify complex<int16_t> as the CPU format.
-    uhd_stream_args_t stream_args = {.cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &channel, .n_channels = 1};
+    uhd_stream_args_t stream_args = {.cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &rx_channel, .n_channels = 1};
 
     // Define how device streams to host
     uhd_stream_cmd_t stream_cmd = {
@@ -146,7 +148,7 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
     return 0;
 }
 
-void *usrp_stream_thread(void *arg) {
+void *usrp_rx_thread(void *arg) {
     // USRP RX handle
     uhd_usrp_rx_handle *usrp_rx = arg;
 
@@ -165,7 +167,7 @@ void *usrp_stream_thread(void *arg) {
     // Actual streaming
     while (atomic_load(&running)) {
         // ストリームを受信
-        uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, num_samps_per_once, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
+        uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, INPUT_SAMPS, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
 
         // 受信サンプル数が想定と異なる場合
         if (actual_num_samps != INPUT_SAMPS) {

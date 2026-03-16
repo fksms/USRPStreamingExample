@@ -16,21 +16,22 @@
 _Atomic bool running = true;
 // ------------------------------------------------
 
-// ---------------For USRP Streaming---------------
-// Center frequency
-double freq = 924e6;
-// Sampling rate
-double rate = 10e6;
-// Gain
-double gain = 30.0;
+// --------------------For USRP--------------------
 // Device args (e.g. "type=b200")
 char *device_args = "";
+// ------------------------------------------------
+
+// ------------------For USRP RX-------------------
+// Center frequency
+double rx_freq = 924e6;
+// Sampling rate
+double rx_rate = 10e6;
+// Gain
+double rx_gain = 30.0;
 // Channel (0 or 1)
-size_t channel = 0;
+size_t rx_channel = 0;
 // Antenna ("TX/RX" or "RX2")
-char *antenna = "TX/RX";
-// Number of samples per once
-size_t num_samps_per_once = INPUT_SAMPS;
+char *rx_antenna = "RX2";
 
 // ストリーミングデータを格納するためのバッファ
 LockFreeRingBuffer rb;
@@ -40,37 +41,42 @@ void print_help(void) {
     fprintf(stderr, "XXXXXX\n\n"
 
                     "Options:\n"
-                    "    -a (device args)\n"
-                    "    -c (channel)\n"
-                    "    -f (frequency in Hz)\n"
-                    "    -r (sample rate in Hz)\n"
-                    "    -g (gain)\n"
+                    "    -d (device args)\n"
+                    "    -a (RX antenna)\n"
+                    "    -c (RX channel)\n"
+                    "    -f (RX frequency in Hz)\n"
+                    "    -r (RX sample rate in Hz)\n"
+                    "    -g (RX gain)\n"
                     "    -h (print this help message)\n");
 }
 
 int main(int argc, char *argv[]) {
     int option = 0;
     // Process options
-    while ((option = getopt(argc, argv, "a:c:f:r:g:h")) != -1) {
+    while ((option = getopt(argc, argv, "d:a:c:f:r:g:h")) != -1) {
         switch (option) {
-        case 'a':
+        case 'd':
             device_args = strdup(optarg);
             break;
 
+        case 'a':
+            rx_antenna = strdup(optarg);
+            break;
+
         case 'c':
-            channel = atoi(optarg);
+            rx_channel = atoi(optarg);
             break;
 
         case 'f':
-            freq = atof(optarg);
+            rx_freq = atof(optarg);
             break;
 
         case 'r':
-            rate = atof(optarg);
+            rx_rate = atof(optarg);
             break;
 
         case 'g':
-            gain = atof(optarg);
+            rx_gain = atof(optarg);
             break;
 
         case 'h':
@@ -109,7 +115,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    // Setup Channelizer
+    // Setup channelizer
     channelizer_handle channelizer;
     if (channelizer_setup(&channelizer)) {
         printf("Setup channelizer failed\n");
@@ -148,32 +154,32 @@ int main(int argc, char *argv[]) {
     // ------------------------------------------------------------
 
     // ------------------------Create thread-----------------------
-    pthread_t usrpStreamThread;
+    pthread_t usrpRxThread;
     pthread_t channelizerThread;
 
-    // Create Channelizer thread
+    // Create channelizer thread
     if (pthread_create(&channelizerThread, &attr, channelizer_thread, (void *)&channelizer)) {
-        printf("Create channelizer_thread failed\n");
+        printf("Create channelizer thread failed\n");
         return -1;
     }
 
-    // Create USRP stream thread
-    if (pthread_create(&usrpStreamThread, &attr, usrp_stream_thread, (void *)&usrp_rx)) {
-        printf("Create usrp_stream_thread failed\n");
+    // Create USRP RX thread
+    if (pthread_create(&usrpRxThread, &attr, usrp_rx_thread, (void *)&usrp_rx)) {
+        printf("Create USRP RX thread failed\n");
         return -1;
     }
     // ------------------------------------------------------------
 
     // -------------------------Join thread------------------------
-    // Join USRP stream thread
-    if (pthread_join(usrpStreamThread, NULL)) {
-        printf("Join usrp_stream_thread failed\n");
+    // Join USRP RX thread
+    if (pthread_join(usrpRxThread, NULL)) {
+        printf("Join USRP RX thread failed\n");
         return -1;
     }
 
-    // Join Channelizer thread
+    // Join channelizer thread
     if (pthread_join(channelizerThread, NULL)) {
-        printf("Join channelizer_thread failed\n");
+        printf("Join channelizer thread failed\n");
         return -1;
     }
     // ------------------------------------------------------------

@@ -18,7 +18,7 @@ extern _Atomic bool running;
 // ------------------------------------------------
 
 // --------------From USRP Streaming---------------
-extern double rate;
+extern double rx_rate;
 
 extern LockFreeRingBuffer rb;
 // ------------------------------------------------
@@ -50,8 +50,8 @@ void *channelizer_thread(void *arg) {
     // Channelizer handle
     channelizer_handle *handle = arg;
 
-    // `rate`と`OUTPUT_SAMPS`から待機時間を計算
-    double wait_sec = (double)OUTPUT_SAMPS / rate;
+    // `rx_rate`と`OUTPUT_SAMPS`から待機時間を計算
+    double wait_sec = (double)OUTPUT_SAMPS / rx_rate;
     time_t sec = (time_t)wait_sec;
     long nsec = (long)((wait_sec - sec) * 1e9);
     struct timespec ts = {sec, nsec};
