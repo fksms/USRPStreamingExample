@@ -73,7 +73,7 @@ void *channelizer_thread(void *arg) {
     // 畳み込み用レジスタ
     static double complex reg[NUM_CHANNELS][COEF_PER_STAGE] = {0};
 
-    // フィルタ出力用
+    // フィルタ出力用バッファ
     double complex filter_output[NUM_CHANNELS] = {0};
 
     // FFTWの入出力配列とプラン
@@ -81,60 +81,7 @@ void *channelizer_thread(void *arg) {
     fftw_complex out[NUM_CHANNELS];
     fftw_plan plan = fftw_plan_dft_1d(NUM_CHANNELS, in, out, FFTW_BACKWARD, FFTW_MEASURE);
 
-    // チャネライザ出力用
-    //
-    // 出力配列 channelizer_out の周波数配置イメージ：
-    //
-    // - 偶数チャネル（NUM_CHANNELS=2N）の場合
-    //
-    // [low freq] ↑
-    //   channelizer_out[N+1]
-    //   channelizer_out[N+2]
-    //   ...
-    //   channelizer_out[2N-1]
-    //   channelizer_out[0] (Center Frequency)
-    //   channelizer_out[1]
-    //   ...
-    //   channelizer_out[N-2]
-    //   channelizer_out[N-1]
-    // ↓ [high freq]
-    //
-    // ※channelizer_out[N] は、低い方と高い方の両端が重なっており、両方の周波数成分が半分ずつ含まれている（折り返し点）
-    //
-    // 例：NUM_CHANNELS=8 の場合
-    //   channelizer_out[0] ...中心周波数
-    //   channelizer_out[5] ～ channelizer_out[7] ...低周波側
-    //   channelizer_out[1] ～ channelizer_out[3] ...高周波側
-    //   channelizer_out[4] ...低・高周波の折り返し
-    //
-    // 周波数順に並べると以下のようなイメージ：
-    //   [low freq] channelizer_out[5] [6] [7] [0] [1] [2] [3] [high freq]
-    //
-    //
-    // - 奇数チャネル（NUM_CHANNELS=2N+1）の場合
-    //
-    // [low freq] ↑
-    //   channelizer_out[N+1]
-    //   channelizer_out[N+2]
-    //   ...
-    //   channelizer_out[2N]
-    //   channelizer_out[0] (Center Frequency)
-    //   channelizer_out[1]
-    //   ...
-    //   channelizer_out[N-1]
-    //   channelizer_out[N]
-    // ↓ [high freq]
-    //
-    // ※奇数の場合は折り返し点（両端が重なる点）は存在しない
-    //
-    // 例：NUM_CHANNELS=7 の場合
-    //   channelizer_out[0] ...中心周波数
-    //   channelizer_out[4] ～ channelizer_out[6] ...低周波側
-    //   channelizer_out[1] ～ channelizer_out[3] ...高周波側
-    //
-    // 周波数順に並べると以下のようなイメージ：
-    //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
-    //
+    // チャネライザ出力用バッファ
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS] = {0};
 
     /* ---------------------- ここまでチャネライザ用変数 ---------------------- */
@@ -145,7 +92,7 @@ void *channelizer_thread(void *arg) {
     double power[NUM_CHANNELS] = {0};
 
     // チャネル順並び替え用配列
-    // （channelizer_out の周波数配置は上記のコメントのようになっているので、周波数順に並び替えるためのインデックス配列を定義）
+    // （channelizer_out の周波数配置は以下のコメントのようになっているので、周波数順に並び替えるためのインデックス配列を定義）
     size_t sorted_idx[NUM_CHANNELS];
     get_sorted_channel_indices(NUM_CHANNELS, sorted_idx);
 
@@ -189,7 +136,59 @@ void *channelizer_thread(void *arg) {
         // 信号電力を初期化
         memset(power, 0, sizeof(power));
 
-        // チャネライザ処理
+        // ---------------------- チャネライザ処理 ----------------------
+        // 出力配列 channelizer_out の周波数配置イメージ：
+        //
+        // - 偶数チャネル（NUM_CHANNELS=2N）の場合
+        //
+        // [low freq] ↑
+        //   channelizer_out[N+1]
+        //   channelizer_out[N+2]
+        //   ...
+        //   channelizer_out[2N-1]
+        //   channelizer_out[0] (Center Frequency)
+        //   channelizer_out[1]
+        //   ...
+        //   channelizer_out[N-2]
+        //   channelizer_out[N-1]
+        // ↓ [high freq]
+        //
+        // ※channelizer_out[N] は、低い方と高い方の両端が重なっており、両方の周波数成分が半分ずつ含まれている（折り返し点）
+        //
+        // 例：NUM_CHANNELS=8 の場合
+        //   channelizer_out[0] ...中心周波数
+        //   channelizer_out[5] ～ channelizer_out[7] ...低周波側
+        //   channelizer_out[1] ～ channelizer_out[3] ...高周波側
+        //   channelizer_out[4] ...低・高周波の折り返し
+        //
+        // 周波数順に並べると以下のようなイメージ：
+        //   [low freq] channelizer_out[5] [6] [7] [0] [1] [2] [3] [high freq]
+        //
+        //
+        // - 奇数チャネル（NUM_CHANNELS=2N+1）の場合
+        //
+        // [low freq] ↑
+        //   channelizer_out[N+1]
+        //   channelizer_out[N+2]
+        //   ...
+        //   channelizer_out[2N]
+        //   channelizer_out[0] (Center Frequency)
+        //   channelizer_out[1]
+        //   ...
+        //   channelizer_out[N-1]
+        //   channelizer_out[N]
+        // ↓ [high freq]
+        //
+        // ※奇数の場合は折り返し点（両端が重なる点）は存在しない
+        //
+        // 例：NUM_CHANNELS=7 の場合
+        //   channelizer_out[0] ...中心周波数
+        //   channelizer_out[4] ～ channelizer_out[6] ...低周波側
+        //   channelizer_out[1] ～ channelizer_out[3] ...高周波側
+        //
+        // 周波数順に並べると以下のようなイメージ：
+        //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
+        // -----------------------------------------------------------
         for (size_t nn = 0; nn < TIME_SLOTS; ++nn) {
             // レジスタを右向きにシフト
             for (size_t ch = 0; ch < NUM_CHANNELS; ++ch) {
@@ -311,3 +310,29 @@ void *channelizer_thread(void *arg) {
 }
 
 int channelizer_close(void) { return 0; }
+
+// Polyphase Channelizer出力のチャネル順並び替え関数
+// （channelizer_out の周波数配置は上記のコメントのようになっているので、周波数順に並び替えるための機能を定義）
+void get_sorted_channel_indices(size_t num_channels, size_t *sorted_idx) {
+    size_t N = num_channels / 2;
+    size_t idx = 0;
+
+    if (num_channels % 2 == 0) {
+        // 偶数チャネル
+        for (size_t i = N + 1; i < num_channels; ++i)
+            sorted_idx[idx++] = i;
+        sorted_idx[idx++] = 0;
+        for (size_t i = 1; i < N; ++i)
+            sorted_idx[idx++] = i;
+        sorted_idx[idx++] = N - 1;
+        // 折り返し点Nは除外
+    } else {
+        // 奇数チャネル
+        for (size_t i = N + 1; i < num_channels; ++i)
+            sorted_idx[idx++] = i;
+        sorted_idx[idx++] = 0;
+        for (size_t i = 1; i < N; ++i)
+            sorted_idx[idx++] = i;
+        sorted_idx[idx++] = N;
+    }
+}
