@@ -116,8 +116,7 @@ void *channelizer_thread(void *arg) {
 
         // I, Q を複素数に変換
         for (size_t j = 0; j < OUTPUT_SAMPS; ++j) {
-            // USRPからの信号はQ0, I0, Q1, I1, ... の順で格納されているはず
-            complex_signal[j] = output_buf[2 * j + 1] + output_buf[2 * j] * I;
+            complex_signal[j] = output_buf[2 * j] + output_buf[2 * j + 1] * I;
         }
 
         // チャンネルごとに信号を分割
