@@ -12,6 +12,9 @@
 #include "lfrb.h"
 #include "usrp.h"
 
+// 送信テスト時は以下をコメントアウト
+// #define TX_TEST
+
 // ---------------------Status---------------------
 _Atomic bool running = true;
 // ------------------------------------------------
@@ -115,6 +118,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+#ifdef TX_TEST
     // USRP TX handle
     uhd_usrp_tx_handle usrp_tx = {
         .usrp = usrp,
@@ -127,6 +131,7 @@ int main(int argc, char *argv[]) {
         printf("Setup USRP TX failed\n");
         return -1;
     }
+#endif // TX_TEST
 
     // Setup channelizer
     channelizer_handle channelizer;
@@ -167,35 +172,38 @@ int main(int argc, char *argv[]) {
     // ------------------------------------------------------------
 
     // ------------------------Create thread-----------------------
-    pthread_t usrpRxThread;
-    pthread_t usrpTxThread;
-    pthread_t channelizerThread;
-
     // Create channelizer thread
+    pthread_t channelizerThread;
     if (pthread_create(&channelizerThread, &attr, channelizer_thread, (void *)&channelizer)) {
         printf("Create channelizer thread failed\n");
         return -1;
     }
 
     // Create USRP RX thread
+    pthread_t usrpRxThread;
     if (pthread_create(&usrpRxThread, &attr, usrp_rx_thread, (void *)&usrp_rx)) {
         printf("Create USRP RX thread failed\n");
         return -1;
     }
 
+#ifdef TX_TEST
     // Create USRP TX thread
+    pthread_t usrpTxThread;
     if (pthread_create(&usrpTxThread, &attr, usrp_tx_thread, (void *)&usrp_tx)) {
         printf("Create USRP TX thread failed\n");
         return -1;
     }
+#endif // TX_TEST
     // ------------------------------------------------------------
 
     // -------------------------Join thread------------------------
+#ifdef TX_TEST
     // Join USRP TX thread
     if (pthread_join(usrpTxThread, NULL)) {
         printf("Join USRP TX thread failed\n");
         return -1;
     }
+#endif // TX_TEST
 
     // Join USRP RX thread
     if (pthread_join(usrpRxThread, NULL)) {
@@ -217,11 +225,13 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+#ifdef TX_TEST
     // Close USRP TX
     if (usrp_tx_close(&usrp_tx)) {
         printf("Close USRP TX failed\n");
         return -1;
     }
+#endif // TX_TEST
 
     // Close USRP RX
     if (usrp_rx_close(&usrp_rx)) {
@@ -230,7 +240,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Close USRP
-    if (usrp_close(usrp)) {
+    if (usrp_close(&usrp)) {
         printf("Close USRP failed\n");
         return -1;
     }

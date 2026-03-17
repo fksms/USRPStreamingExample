@@ -32,6 +32,6 @@ void *usrp_rx_thread(void *arg);
 void *usrp_tx_thread(void *arg);
 int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx);
 int usrp_tx_close(uhd_usrp_tx_handle *usrp_tx);
-int usrp_close(uhd_usrp_handle usrp);
+int usrp_close(uhd_usrp_handle *usrp);
 
 #endif // __USRP_H__
