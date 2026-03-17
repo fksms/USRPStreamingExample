@@ -185,6 +185,12 @@ int main(int argc, char *argv[]) {
     // ------------------------------------------------------------
 
     // ----------------------------Close---------------------------
+    // Close channelizer
+    if (channelizer_close(&channelizer)) {
+        printf("Close channelizer failed\n");
+        return -1;
+    }
+
     // Close USRP RX
     if (usrp_rx_close(&usrp_rx)) {
         printf("Close USRP RX failed\n");

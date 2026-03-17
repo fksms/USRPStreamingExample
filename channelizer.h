@@ -1,6 +1,8 @@
 #ifndef __CHANNELIZER_H__
 #define __CHANNELIZER_H__
 
+#include <fftw3.h>
+
 #include "lfrb.h"
 
 /* ---------------------------------------------------------------
@@ -22,10 +24,15 @@
 typedef struct {
     // 分割されたFIRフィルタ係数
     double split_filter[NUM_CHANNELS][COEF_PER_STAGE];
+    // FFTWの入出力配列とプラン
+    fftw_complex in[NUM_CHANNELS];
+    fftw_complex out[NUM_CHANNELS];
+    fftw_plan plan;
 } channelizer_handle;
 
 void get_sorted_channel_indices(int num_channels, int *sorted_idx);
 int channelizer_setup(channelizer_handle *handle);
 void *channelizer_thread(void *arg);
+int channelizer_close(channelizer_handle *handle);
 
 #endif // __CHANNELIZER_H__

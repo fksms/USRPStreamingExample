@@ -41,6 +41,9 @@ int channelizer_setup(channelizer_handle *handle) {
         }
     }
 
+    // FFTWプランの作成
+    handle->plan = fftw_plan_dft_1d(NUM_CHANNELS, handle->in, handle->out, FFTW_BACKWARD, FFTW_MEASURE);
+
     return 0;
 }
 
@@ -75,11 +78,6 @@ void *channelizer_thread(void *arg) {
 
     // フィルタ出力用バッファ
     double complex filter_output[NUM_CHANNELS] = {0};
-
-    // FFTWの入出力配列とプラン
-    fftw_complex in[NUM_CHANNELS];
-    fftw_complex out[NUM_CHANNELS];
-    fftw_plan plan = fftw_plan_dft_1d(NUM_CHANNELS, in, out, FFTW_BACKWARD, FFTW_MEASURE);
 
     // チャネライザ出力用バッファ
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS] = {0};
@@ -125,12 +123,6 @@ void *channelizer_thread(void *arg) {
                 split_signal[ch][j] = complex_signal[j * NUM_CHANNELS + ch];
             }
         }
-
-        // レジスタを初期化（初期化しなくても良いっぽいので、一旦コメントアウト）
-        // memset(reg, 0, sizeof(reg));
-
-        // チャネライザ出力を初期化（そもそも初期化する必要がないためコメントアウト）
-        // memset(channelizer_out, 0, sizeof(channelizer_out));
 
         // 信号電力を初期化
         memset(power, 0, sizeof(power));
@@ -198,9 +190,6 @@ void *channelizer_thread(void *arg) {
                 reg[ch][0] = split_signal[ch][nn];
             }
 
-            // フィルタ出力を初期化
-            memset(filter_output, 0, sizeof(filter_output));
-
             // 時間信号とフィルタを畳み込み
             for (int mm = 0; mm < NUM_CHANNELS; ++mm) {
                 // reg[mm, ::-1]とsplit_filter[mm, :]の内積
@@ -210,19 +199,22 @@ void *channelizer_thread(void *arg) {
             }
 
             // filter_outputをinにコピー
+            // （filter_outputをinにコピー後にfilter_outputを初期化する）
             for (int i = 0; i < NUM_CHANNELS; ++i) {
-                in[i] = filter_output[i];
+                handle->in[i] = filter_output[i];
+                filter_output[i] = 0;
             }
 
             // FFTWを用いてIFFTを実行
-            fftw_execute(plan);
+            fftw_execute(handle->plan);
 
             // IFFT結果をchannelizer_outに格納
             // （信号の電力も同時に計算する）
             for (int i = 0; i < NUM_CHANNELS; ++i) {
-                channelizer_out[i][nn] = out[i];
-                double mag = cabs(out[i]);
-                power[i] += mag * mag;
+                channelizer_out[i][nn] = handle->out[i];
+                double re = creal(handle->out[i]);
+                double im = cimag(handle->out[i]);
+                power[i] += re * re + im * im;
             }
         }
 
@@ -302,13 +294,15 @@ void *channelizer_thread(void *arg) {
     // Stop
     atomic_store(&running, false);
 
-    // FFTWプランの破棄
-    fftw_destroy_plan(plan);
-
     return NULL;
 }
 
-int channelizer_close(void) { return 0; }
+int channelizer_close(channelizer_handle *handle) {
+    // FFTWプランの破棄
+    fftw_destroy_plan(handle->plan);
+
+    return 0;
+}
 
 // Polyphase Channelizer出力のチャネル順並び替え関数
 // （channelizer_out の周波数配置は上記のコメントのようになっているので、周波数順に並び替えるための機能を定義）
