@@ -400,12 +400,12 @@ int usrp_tx_close(uhd_usrp_tx_handle *usrp_tx) {
     return 0;
 }
 
-int usrp_close(uhd_usrp_handle usrp) {
+int usrp_close(uhd_usrp_handle *usrp) {
     // UHD error codes
     uhd_error error;
 
     // Cleaning up USRP
-    error = uhd_usrp_free(&usrp);
+    error = uhd_usrp_free(usrp);
     if (error) {
         printf("%u\n", error);
         return error;
