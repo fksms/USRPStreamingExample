@@ -35,8 +35,8 @@ int channelizer_setup(channelizer_handle *handle) {
     fir_design_kaiser_lowpass(filter_coef, order, 1.0 / NUM_CHANNELS, KAISER_BETA);
 
     // FIRフィルタ係数をチャンネルごとに分割
-    for (size_t ch = 0; ch < NUM_CHANNELS; ++ch) {
-        for (size_t j = 0; j < COEF_PER_STAGE; ++j) {
+    for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+        for (int j = 0; j < COEF_PER_STAGE; ++j) {
             split_filter[ch][j] = filter_coef[j * NUM_CHANNELS + ch];
         }
     }
@@ -93,12 +93,12 @@ void *channelizer_thread(void *arg) {
 
     // チャネル順並び替え用配列
     // （channelizer_out の周波数配置は以下のコメントのようになっているので、周波数順に並び替えるためのインデックス配列を定義）
-    size_t sorted_idx[NUM_CHANNELS];
+    int sorted_idx[NUM_CHANNELS];
     get_sorted_channel_indices(NUM_CHANNELS, sorted_idx);
 
     // CFARを実施するチャネル数
     // （偶数チャネルの場合は折り返し点を除外する）
-    size_t sorted_len = NUM_CHANNELS;
+    int sorted_len = NUM_CHANNELS;
     if (NUM_CHANNELS % 2 == 0)
         sorted_len--; // 偶数時は折り返し点除外
 
@@ -115,13 +115,13 @@ void *channelizer_thread(void *arg) {
         }
 
         // I, Q を複素数に変換
-        for (size_t j = 0; j < OUTPUT_SAMPS; ++j) {
+        for (int j = 0; j < OUTPUT_SAMPS; ++j) {
             complex_signal[j] = output_buf[2 * j] + output_buf[2 * j + 1] * I;
         }
 
         // チャンネルごとに信号を分割
-        for (size_t ch = 0; ch < NUM_CHANNELS; ++ch) {
-            for (size_t j = 0; j < TIME_SLOTS; ++j) {
+        for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+            for (int j = 0; j < TIME_SLOTS; ++j) {
                 split_signal[ch][j] = complex_signal[j * NUM_CHANNELS + ch];
             }
         }
@@ -188,10 +188,10 @@ void *channelizer_thread(void *arg) {
         // 周波数順に並べると以下のようなイメージ：
         //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
         // -----------------------------------------------------------
-        for (size_t nn = 0; nn < TIME_SLOTS; ++nn) {
+        for (int nn = 0; nn < TIME_SLOTS; ++nn) {
             // レジスタを右向きにシフト
-            for (size_t ch = 0; ch < NUM_CHANNELS; ++ch) {
-                for (size_t k = COEF_PER_STAGE - 1; k > 0; --k) {
+            for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+                for (int k = COEF_PER_STAGE - 1; k > 0; --k) {
                     reg[ch][k] = reg[ch][k - 1];
                 }
                 // レジスタの最左列に信号を1つずつ代入
@@ -202,15 +202,15 @@ void *channelizer_thread(void *arg) {
             memset(filter_output, 0, sizeof(filter_output));
 
             // 時間信号とフィルタを畳み込み
-            for (size_t mm = 0; mm < NUM_CHANNELS; ++mm) {
+            for (int mm = 0; mm < NUM_CHANNELS; ++mm) {
                 // reg[mm, ::-1]とsplit_filter[mm, :]の内積
-                for (size_t kk = 0; kk < COEF_PER_STAGE; ++kk) {
+                for (int kk = 0; kk < COEF_PER_STAGE; ++kk) {
                     filter_output[NUM_CHANNELS - mm - 1] += reg[mm][COEF_PER_STAGE - kk - 1] * split_filter[mm][kk];
                 }
             }
 
             // filter_outputをinにコピー
-            for (size_t i = 0; i < NUM_CHANNELS; ++i) {
+            for (int i = 0; i < NUM_CHANNELS; ++i) {
                 in[i] = filter_output[i];
             }
 
@@ -219,7 +219,7 @@ void *channelizer_thread(void *arg) {
 
             // IFFT結果をchannelizer_outに格納
             // （信号の電力も同時に計算する）
-            for (size_t i = 0; i < NUM_CHANNELS; ++i) {
+            for (int i = 0; i < NUM_CHANNELS; ++i) {
                 channelizer_out[i][nn] = out[i];
                 double mag = cabs(out[i]);
                 power[i] += mag * mag;
@@ -255,13 +255,13 @@ void *channelizer_thread(void *arg) {
         //
         // 判定結果はcfar_resultに格納。
         // ------------------------------------------------------
-        for (size_t idx = 0; idx < sorted_len; ++idx) {
-            size_t CUT = sorted_idx[idx];
+        for (int idx = 0; idx < sorted_len; ++idx) {
+            int CUT = sorted_idx[idx];
             // TRAIN/GAURD領域の両側インデックス
-            int left_start = (int)idx - CFAR_GUARD - CFAR_TRAIN;
-            int left_end = (int)idx - CFAR_GUARD - 1;
-            int right_start = (int)idx + CFAR_GUARD + 1;
-            int right_end = (int)idx + CFAR_GUARD + CFAR_TRAIN;
+            int left_start = idx - CFAR_GUARD - CFAR_TRAIN;
+            int left_end = idx - CFAR_GUARD - 1;
+            int right_start = idx + CFAR_GUARD + 1;
+            int right_end = idx + CFAR_GUARD + CFAR_TRAIN;
 
             double train_sum = 0.0;
             int train_count = 0;
@@ -275,8 +275,8 @@ void *channelizer_thread(void *arg) {
                 }
             }
             // 右側TRAIN
-            if (right_end < (int)sorted_len) {
-                for (int i = right_start; i <= right_end && i < (int)sorted_len; ++i) {
+            if (right_end < sorted_len) {
+                for (int i = right_start; i <= right_end && i < sorted_len; ++i) {
                     // 右側の電力を加算
                     train_sum += power[sorted_idx[i]];
                     train_count++;
@@ -290,7 +290,7 @@ void *channelizer_thread(void *arg) {
             // テスト出力
             if (cfar_result[CUT]) {
                 // CUTが検出された場合の処理（例：ログ出力）
-                printf("CFAR Detection: Channel %zu\n", CUT);
+                printf("CFAR Detection: Channel %d\n", CUT);
             }
         }
 
@@ -312,26 +312,12 @@ int channelizer_close(void) { return 0; }
 
 // Polyphase Channelizer出力のチャネル順並び替え関数
 // （channelizer_out の周波数配置は上記のコメントのようになっているので、周波数順に並び替えるための機能を定義）
-void get_sorted_channel_indices(size_t num_channels, size_t *sorted_idx) {
-    size_t N = num_channels / 2;
-    size_t idx = 0;
+void get_sorted_channel_indices(int num_channels, int *sorted_idx) {
+    int N = num_channels / 2;
+    int idx = 0;
 
-    if (num_channels % 2 == 0) {
-        // 偶数チャネル
-        for (size_t i = N + 1; i < num_channels; ++i)
-            sorted_idx[idx++] = i;
-        sorted_idx[idx++] = 0;
-        for (size_t i = 1; i < N; ++i)
-            sorted_idx[idx++] = i;
-        sorted_idx[idx++] = N - 1;
-        // 折り返し点Nは除外
-    } else {
-        // 奇数チャネル
-        for (size_t i = N + 1; i < num_channels; ++i)
-            sorted_idx[idx++] = i;
-        sorted_idx[idx++] = 0;
-        for (size_t i = 1; i < N; ++i)
-            sorted_idx[idx++] = i;
-        sorted_idx[idx++] = N;
-    }
+    for (int i = N + 1; i < num_channels; ++i)
+        sorted_idx[idx++] = i;
+    for (int i = 0; i < N + 1; ++i)
+        sorted_idx[idx++] = i;
 }

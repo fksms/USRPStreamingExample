@@ -24,7 +24,7 @@ typedef struct {
     double split_filter[NUM_CHANNELS][COEF_PER_STAGE];
 } channelizer_handle;
 
-void get_sorted_channel_indices(size_t num_channels, size_t *sorted_idx);
+void get_sorted_channel_indices(int num_channels, int *sorted_idx);
 int channelizer_setup(channelizer_handle *handle);
 void *channelizer_thread(void *arg);
 
