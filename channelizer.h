@@ -11,7 +11,7 @@
  * KAISER_BETA: カイザー窓のbetaパラメータ
  * ---------------------------------------------------------------*/
 #define NUM_CHANNELS 50
-#define COEF_PER_STAGE 13
+#define COEF_PER_STAGE 16
 #define KAISER_BETA 8.6
 
 #define TIME_SLOTS (OUTPUT_SAMPS / NUM_CHANNELS)

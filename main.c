@@ -115,6 +115,19 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // USRP TX handle
+    uhd_usrp_tx_handle usrp_tx = {
+        .usrp = usrp,
+        .tx_streamer = NULL,
+        .tx_metadata = NULL,
+    };
+
+    // Setup USRP TX
+    if (usrp_tx_setup(&usrp_tx)) {
+        printf("Setup USRP TX failed\n");
+        return -1;
+    }
+
     // Setup channelizer
     channelizer_handle channelizer;
     if (channelizer_setup(&channelizer)) {
@@ -155,6 +168,7 @@ int main(int argc, char *argv[]) {
 
     // ------------------------Create thread-----------------------
     pthread_t usrpRxThread;
+    pthread_t usrpTxThread;
     pthread_t channelizerThread;
 
     // Create channelizer thread
@@ -168,9 +182,21 @@ int main(int argc, char *argv[]) {
         printf("Create USRP RX thread failed\n");
         return -1;
     }
+
+    // Create USRP TX thread
+    if (pthread_create(&usrpTxThread, &attr, usrp_tx_thread, (void *)&usrp_tx)) {
+        printf("Create USRP TX thread failed\n");
+        return -1;
+    }
     // ------------------------------------------------------------
 
     // -------------------------Join thread------------------------
+    // Join USRP TX thread
+    if (pthread_join(usrpTxThread, NULL)) {
+        printf("Join USRP TX thread failed\n");
+        return -1;
+    }
+
     // Join USRP RX thread
     if (pthread_join(usrpRxThread, NULL)) {
         printf("Join USRP RX thread failed\n");
@@ -188,6 +214,12 @@ int main(int argc, char *argv[]) {
     // Close channelizer
     if (channelizer_close(&channelizer)) {
         printf("Close channelizer failed\n");
+        return -1;
+    }
+
+    // Close USRP TX
+    if (usrp_tx_close(&usrp_tx)) {
+        printf("Close USRP TX failed\n");
         return -1;
     }
 
