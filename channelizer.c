@@ -8,6 +8,7 @@
 
 #include <fftw3.h>
 
+#include "burst_catcher.h"
 #include "cfar.h"
 #include "channelizer.h"
 #include "fir_kaiser.h"
@@ -48,8 +49,6 @@ int channelizer_setup(channelizer_handle *handle) {
 }
 
 void *channelizer_thread(void *arg) {
-    // unsigned int counter = 0;
-
     // Channelizer handle
     channelizer_handle *handle = arg;
 
@@ -61,8 +60,6 @@ void *channelizer_thread(void *arg) {
 
     // リングバッファから読み取った信号を格納するためのバッファ
     static iq_sample_t output_buf[OUTPUT_ELEMS];
-
-    /* ---------------------- ここからチャネライザ用変数 ---------------------- */
 
     // 複素信号を格納するためのバッファ
     static double complex complex_signal[OUTPUT_SAMPS];
@@ -76,9 +73,8 @@ void *channelizer_thread(void *arg) {
     // チャネライザ出力用バッファ
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS] = {0};
 
-    /* ---------------------- ここまでチャネライザ用変数 ---------------------- */
-
-    /* ---------------------- ここからCFAR用変数 ---------------------- */
+    // 1つ前のチャネライザ出力を保存するバッファ
+    static double complex prev_channelizer_out[NUM_CHANNELS][TIME_SLOTS] = {0};
 
     // 各チャンネルの信号の電力を格納するバッファ
     double power[NUM_CHANNELS] = {0};
@@ -97,7 +93,11 @@ void *channelizer_thread(void *arg) {
     // CFAR判定結果格納用
     bool cfar_result[NUM_CHANNELS] = {false};
 
-    /* ---------------------- ここまでCFAR用変数 ---------------------- */
+    // 1つ前のCFAR判定結果を保存するバッファ
+    bool prev_cfar_result[NUM_CHANNELS] = {false};
+
+    // 各チャネルのBurstCatcher用配列
+    static BurstCatcher burst_catcher[NUM_CHANNELS];
 
     while (atomic_load(&running)) {
         if (!lfrb_read(&rb, output_buf)) {
@@ -114,7 +114,7 @@ void *channelizer_thread(void *arg) {
         // 信号電力を初期化
         memset(power, 0, sizeof(power));
 
-        // ---------------------- チャネライザ処理 ----------------------
+        // ----------------------- Channelizer -----------------------
         // 出力配列 channelizer_out の周波数配置イメージ：
         //
         // - 偶数チャネル（NUM_CHANNELS=2N）の場合
@@ -203,7 +203,7 @@ void *channelizer_thread(void *arg) {
             }
         }
 
-        // ---------------------- CFAR処理 ----------------------
+        // -------------------------- CFAR ---------------------------
         // 概要：
         // 各チャネルの信号電力（power）に対して、周波数順に並び替えた配列(sorted_idx)を用いてCFAR判定を行う。
         // CFARは、CUT（判定対象チャネル）の両側にGUARD領域を設け、その外側のTRAIN領域の平均電力を基準とし、
@@ -231,7 +231,7 @@ void *channelizer_thread(void *arg) {
         // ※偶数チャネルの場合は折り返し点（両端重なりチャネル）はCFAR判定対象外。
         //
         // 判定結果はcfar_resultに格納。
-        // ------------------------------------------------------
+        // -----------------------------------------------------------
         for (int idx = 0; idx < sorted_len; ++idx) {
             int CUT = sorted_idx[idx];
             // TRAIN/GAURD領域の両側インデックス
@@ -271,9 +271,55 @@ void *channelizer_thread(void *arg) {
             }
         }
 
-        // printf("%d\t%f\t%f\n", counter, power[0], power[1]);
+        // ---------------------- Burst Catcher ----------------------
+        // 概要：
+        // Burst Catcherは、CFAR判定結果に基づき、バースト信号（連続した検出区間）の開始・継続・終了を管理する。
+        // 具体的には、各チャネルごとに以下の状態遷移でバースト信号をバッファに蓄積する：
+        //   - false→true: バースト開始。前フレームと現フレームをバッファに積む
+        //   - true→true: バースト継続。現フレームをバッファに追記
+        //   - true→false: バースト終了。現フレームまで追記し、バッファを確定（flush等）
+        //   - false→false: 何もしない
+        // バッファには最大MAX_FRAMESまでフレームを蓄積し、lenで現在の蓄積数を管理。
+        // activeフラグでバースト中かどうかを判定。
+        // バースト終了時には、バッファ内容を処理（flush_burst等）し、lenとactiveをリセットする。
+        // -----------------------------------------------------------
+        for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+            // バッファへのポインタ
+            BurstCatcher *catcher = &burst_catcher[ch];
 
-        // counter++;
+            // CFAR判定の現在と1つ前の状態を比較して、バーストの開始・継続・終了を判断
+            bool cur = cfar_result[ch];
+            bool prv = prev_cfar_result[ch];
+
+            if (!prv && cur) {
+                // false→true: 1つ前フレームを先頭に、現フレームを2番目に積む
+                memcpy(catcher->buf[0], prev_channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+                memcpy(catcher->buf[1], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+                catcher->len = 2;
+                catcher->active = true;
+
+            } else if (prv && cur) {
+                // true→true: 現フレームを追記
+                if (catcher->len < MAX_FRAMES) {
+                    memcpy(catcher->buf[catcher->len++], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+                }
+
+            } else if (prv && !cur) {
+                // true→false: 現フレームまで追記して確定
+                if (catcher->len < MAX_FRAMES) {
+                    memcpy(catcher->buf[catcher->len++], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+                }
+                // flush_burst(ch, catcher->buf, catcher->len);
+                printf("Burst Catcher: Channel %d, Length %d frames\n", ch, catcher->len);
+                catcher->len = 0;
+                catcher->active = false;
+            }
+            // false→false (!prv && !cur): 何もしない
+        }
+
+        // 1つ前のCFAR結果とチャネライザ出力を保存
+        memcpy(prev_cfar_result, cfar_result, sizeof(cfar_result));
+        memcpy(prev_channelizer_out, channelizer_out, sizeof(channelizer_out));
     }
 
     // Stop
