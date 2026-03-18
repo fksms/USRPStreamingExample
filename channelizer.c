@@ -42,7 +42,7 @@ int channelizer_setup(channelizer_handle *handle) {
     }
 
     // FFTWプランの作成
-    handle->plan = fftw_plan_dft_1d(NUM_CHANNELS, handle->in, handle->out, FFTW_BACKWARD, FFTW_MEASURE);
+    handle->plan = fftw_plan_dft_1d(NUM_CHANNELS, handle->in, handle->out, FFTW_FORWARD, FFTW_MEASURE);
 
     return 0;
 }
@@ -75,9 +75,6 @@ void *channelizer_thread(void *arg) {
 
     // 畳み込み用レジスタ
     static double complex reg[NUM_CHANNELS][COEF_PER_STAGE] = {0};
-
-    // フィルタ出力用バッファ
-    double complex filter_output[NUM_CHANNELS] = {0};
 
     // チャネライザ出力用バッファ
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS] = {0};
@@ -119,8 +116,8 @@ void *channelizer_thread(void *arg) {
 
         // チャンネルごとに信号を分割
         for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
-            for (int j = 0; j < TIME_SLOTS; ++j) {
-                split_signal[ch][j] = complex_signal[j * NUM_CHANNELS + ch];
+            for (int nn = 0; nn < TIME_SLOTS; ++nn) {
+                split_signal[ch][nn] = complex_signal[nn * NUM_CHANNELS + ch];
             }
         }
 
@@ -181,28 +178,24 @@ void *channelizer_thread(void *arg) {
         //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
         // -----------------------------------------------------------
         for (int nn = 0; nn < TIME_SLOTS; ++nn) {
-            // レジスタを右向きにシフト
+            // レジスタを右向きに1つずつシフト
             for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
-                for (int k = COEF_PER_STAGE - 1; k > 0; --k) {
-                    reg[ch][k] = reg[ch][k - 1];
+                for (int kk = 1; kk < COEF_PER_STAGE; ++kk) {
+                    reg[ch][kk] = reg[ch][kk - 1];
                 }
                 // レジスタの最左列に信号を1つずつ代入
                 reg[ch][0] = split_signal[ch][nn];
             }
 
-            // 時間信号とフィルタを畳み込み
-            for (int mm = 0; mm < NUM_CHANNELS; ++mm) {
-                // reg[mm, ::-1]とsplit_filter[mm, :]の内積
+            // 時間信号とフィルタの畳み込みを行った後、FFTWの入力配列 in に格納
+            for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+                // フィルタ出力を計算
+                double complex filter_output = 0;
+                // reg[ch, ::-1]とsplit_filter[ch, :]の内積
                 for (int kk = 0; kk < COEF_PER_STAGE; ++kk) {
-                    filter_output[NUM_CHANNELS - mm - 1] += reg[mm][COEF_PER_STAGE - kk - 1] * split_filter[mm][kk];
+                    filter_output += reg[ch][COEF_PER_STAGE - kk - 1] * split_filter[ch][kk];
                 }
-            }
-
-            // filter_outputをinにコピー
-            // （filter_outputをinにコピー後にfilter_outputを初期化する）
-            for (int i = 0; i < NUM_CHANNELS; ++i) {
-                handle->in[i] = filter_output[i];
-                filter_output[i] = 0;
+                handle->in[ch] = filter_output;
             }
 
             // FFTWを用いてIFFTを実行
@@ -210,11 +203,11 @@ void *channelizer_thread(void *arg) {
 
             // IFFT結果をchannelizer_outに格納
             // （信号の電力も同時に計算する）
-            for (int i = 0; i < NUM_CHANNELS; ++i) {
-                channelizer_out[i][nn] = handle->out[i];
-                double re = creal(handle->out[i]);
-                double im = cimag(handle->out[i]);
-                power[i] += re * re + im * im;
+            for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+                channelizer_out[ch][nn] = handle->out[ch];
+                double re = creal(handle->out[ch]);
+                double im = cimag(handle->out[ch]);
+                power[ch] += re * re + im * im;
             }
         }
 
