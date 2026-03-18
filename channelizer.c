@@ -67,9 +67,6 @@ void *channelizer_thread(void *arg) {
     // 複素信号を格納するためのバッファ
     static double complex complex_signal[OUTPUT_SAMPS];
 
-    // 分解した信号を格納するためのバッファ
-    static double complex split_signal[NUM_CHANNELS][TIME_SLOTS];
-
     // 分割されたFIRフィルタ係数へのポインタ
     double(*split_filter)[COEF_PER_STAGE] = handle->split_filter;
 
@@ -98,7 +95,7 @@ void *channelizer_thread(void *arg) {
         sorted_len--; // 偶数時は折り返し点除外
 
     // CFAR判定結果格納用
-    bool cfar_result[NUM_CHANNELS] = {0};
+    bool cfar_result[NUM_CHANNELS] = {false};
 
     /* ---------------------- ここまでCFAR用変数 ---------------------- */
 
@@ -112,13 +109,6 @@ void *channelizer_thread(void *arg) {
         // I, Q を複素数に変換
         for (int j = 0; j < OUTPUT_SAMPS; ++j) {
             complex_signal[j] = output_buf[2 * j] + output_buf[2 * j + 1] * I;
-        }
-
-        // チャンネルごとに信号を分割
-        for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
-            for (int nn = 0; nn < TIME_SLOTS; ++nn) {
-                split_signal[ch][nn] = complex_signal[nn * NUM_CHANNELS + ch];
-            }
         }
 
         // 信号電力を初期化
@@ -178,13 +168,15 @@ void *channelizer_thread(void *arg) {
         //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
         // -----------------------------------------------------------
         for (int nn = 0; nn < TIME_SLOTS; ++nn) {
-            // レジスタを右向きに1つずつシフト
+
+            // 各チャネルのレジスタを更新
             for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+                // レジスタを右向きに1つシフト
                 for (int kk = 1; kk < COEF_PER_STAGE; ++kk) {
                     reg[ch][kk] = reg[ch][kk - 1];
                 }
-                // レジスタの最左列に信号を1つずつ代入
-                reg[ch][0] = split_signal[ch][nn];
+                // レジスタの最左列に信号を1つ代入
+                reg[ch][0] = complex_signal[nn * NUM_CHANNELS + ch];
             }
 
             // 時間信号とフィルタの畳み込みを行った後、FFTWの入力配列 in に格納
