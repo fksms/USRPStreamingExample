@@ -8,6 +8,7 @@
 
 #include <fftw3.h>
 
+#include "brb.h"
 #include "burst_catcher.h"
 #include "cfar.h"
 #include "channelizer.h"
@@ -20,8 +21,11 @@ extern _Atomic bool running;
 
 // --------------From USRP Streaming---------------
 extern double rx_rate;
+// ------------------------------------------------
 
-extern LockFreeRingBuffer rb;
+// ---------------------Buffer---------------------
+extern LockFreeRingBuffer lfrb;
+extern BlockingRingBuffer brb;
 // ------------------------------------------------
 
 int channelizer_setup(channelizer_handle *handle) {
@@ -100,7 +104,7 @@ void *channelizer_thread(void *arg) {
     static BurstCatcher burst_catcher[NUM_CHANNELS];
 
     while (atomic_load(&running)) {
-        if (!lfrb_read(&rb, output_buf)) {
+        if (!lfrb_read(&lfrb, output_buf)) {
             // バッファ空の場合
             nanosleep(&ts, NULL);
             continue;
@@ -265,10 +269,10 @@ void *channelizer_thread(void *arg) {
             cfar_result[CUT] = (power[CUT] > CFAR_ALPHA * train_mean);
 
             // テスト出力
-            if (cfar_result[CUT]) {
-                // CUTが検出された場合の処理（例：ログ出力）
-                printf("CFAR Detection: Channel %d\n", CUT);
-            }
+            // if (cfar_result[CUT]) {
+            //     // CUTが検出された場合の処理（例：ログ出力）
+            //     printf("CFAR Detection: Channel %d\n", CUT);
+            // }
         }
 
         // ---------------------- Burst Catcher ----------------------
@@ -291,30 +295,45 @@ void *channelizer_thread(void *arg) {
             bool cur = cfar_result[ch];
             bool prv = prev_cfar_result[ch];
 
+            // false→true: 1つ前フレームを先頭に、現在のフレームをその後ろに格納
             if (!prv && cur) {
-                // false→true: 1つ前フレームを先頭に、現フレームを2番目に積む
-                memcpy(catcher->buf[0], prev_channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
-                memcpy(catcher->buf[1], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
-                catcher->len = 2;
+                memcpy(&catcher->buf[0], prev_channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+                memcpy(&catcher->buf[TIME_SLOTS], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+                catcher->len = 2 * TIME_SLOTS;
                 catcher->active = true;
-
-            } else if (prv && cur) {
-                // true→true: 現フレームを追記
-                if (catcher->len < MAX_FRAMES) {
-                    memcpy(catcher->buf[catcher->len++], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+            }
+            // true→true: 現在のフレームを追記
+            else if (prv && cur) {
+                if (catcher->len < MAX_FRAMES * TIME_SLOTS) {
+                    memcpy(&catcher->buf[catcher->len], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+                    catcher->len += TIME_SLOTS;
                 }
 
-            } else if (prv && !cur) {
-                // true→false: 現フレームまで追記して確定
-                if (catcher->len < MAX_FRAMES) {
-                    memcpy(catcher->buf[catcher->len++], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+            }
+            // true→false: 現在のフレームを追記して確定
+            else if (prv && !cur) {
+                if (catcher->len < MAX_FRAMES * TIME_SLOTS) {
+                    memcpy(&catcher->buf[catcher->len], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
+                    catcher->len += TIME_SLOTS;
                 }
-                // flush_burst(ch, catcher->buf, catcher->len);
-                printf("Burst Catcher: Channel %d, Length %d frames\n", ch, catcher->len);
+                // 可変長配列を作成し、catcher->bufからコピー
+                double complex *burst = malloc(sizeof(double complex) * catcher->len);
+                if (burst) {
+                    memcpy(burst, catcher->buf, sizeof(double complex) * catcher->len);
+                    printf("Burst Catcher: Channel %d, Length %d samples\n", ch, catcher->len);
+                    // 配列のポインタと長さをリングバッファに書き込む
+                    // （リーダー側でメモリ解放を忘れないこと！！）
+                    brb_write(&brb, burst, catcher->len);
+                } else {
+                    printf("Burst Catcher: Channel %d, malloc failed\n", ch);
+                    // メモリ確保に失敗した場合は強制終了
+                    atomic_store(&running, false);
+                    exit(EXIT_FAILURE);
+                }
                 catcher->len = 0;
                 catcher->active = false;
             }
-            // false→false (!prv && !cur): 何もしない
+            // false→false: 何もしない
         }
 
         // 1つ前のCFAR結果とチャネライザ出力を保存

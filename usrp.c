@@ -24,8 +24,6 @@ extern double rx_rate;
 extern double rx_gain;
 extern size_t rx_channel;
 extern char *rx_antenna;
-
-extern LockFreeRingBuffer rb;
 // ------------------------------------------------
 
 // ------------------For USRP TX-------------------
@@ -36,6 +34,10 @@ size_t tx_channel = 1;
 char *tx_antenna = "TX/RX";
 
 double send_time = 0.2; //[sec]
+// ------------------------------------------------
+
+// ---------------------Buffer---------------------
+extern LockFreeRingBuffer lfrb;
 // ------------------------------------------------
 
 int usrp_setup(uhd_usrp_handle *usrp) {
@@ -280,7 +282,7 @@ void *usrp_rx_thread(void *arg) {
             // continue;
         }
 
-        if (!lfrb_write(&rb, recv_buf)) {
+        if (!lfrb_write(&lfrb, recv_buf)) {
             // バッファ溢れの場合
             printf("Ring buffer overflow.\n");
             break;

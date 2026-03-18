@@ -8,8 +8,10 @@
 
 #include <uhd.h>
 
+#include "brb.h"
 #include "channelizer.h"
 #include "lfrb.h"
+#include "reader.h"
 #include "usrp.h"
 
 // 送信テスト時は以下をコメントアウト
@@ -35,9 +37,13 @@ double rx_gain = 30.0;
 size_t rx_channel = 0;
 // Antenna ("TX/RX" or "RX2")
 char *rx_antenna = "RX2";
+// ------------------------------------------------
 
-// ストリーミングデータを格納するためのバッファ
-LockFreeRingBuffer rb;
+// ---------------------Buffer---------------------
+// USRP -> Channelizer のリングバッファ
+LockFreeRingBuffer lfrb;
+// Channelizer -> Reader のリングバッファ
+BlockingRingBuffer brb;
 // ------------------------------------------------
 
 void print_help(void) {
@@ -93,7 +99,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Init the ring buffer
-    lfrb_init(&rb);
+    lfrb_init(&lfrb);
+    brb_init(&brb);
 
     // ----------------------------Setup---------------------------
     // USRP handle
@@ -172,6 +179,13 @@ int main(int argc, char *argv[]) {
     // ------------------------------------------------------------
 
     // ------------------------Create thread-----------------------
+    // Create reader thread
+    pthread_t readerThread;
+    if (pthread_create(&readerThread, &attr, reader_thread, NULL)) {
+        printf("Create reader thread failed\n");
+        return -1;
+    }
+
     // Create channelizer thread
     pthread_t channelizerThread;
     if (pthread_create(&channelizerThread, &attr, channelizer_thread, (void *)&channelizer)) {
@@ -216,6 +230,12 @@ int main(int argc, char *argv[]) {
         printf("Join channelizer thread failed\n");
         return -1;
     }
+
+    // Join reader thread
+    if (pthread_join(readerThread, NULL)) {
+        printf("Join reader thread failed\n");
+        return -1;
+    }
     // ------------------------------------------------------------
 
     // ----------------------------Close---------------------------
@@ -245,6 +265,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     // ------------------------------------------------------------
+
+    // Destroy the ring buffer
+    brb_destroy(&brb);
 
     return 0;
 }
