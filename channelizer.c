@@ -320,7 +320,7 @@ void *channelizer_thread(void *arg) {
                 double complex *burst = malloc(sizeof(double complex) * catcher->len);
                 if (burst) {
                     memcpy(burst, catcher->buf, sizeof(double complex) * catcher->len);
-                    printf("Burst Catcher: Channel %d, Length %d samples\n", ch, catcher->len);
+                    printf("Burst Catcher: Channel %d\n", ch);
                     // 配列のポインタと長さをリングバッファに書き込む
                     // （リーダー側でメモリ解放を忘れないこと！！）
                     brb_write(&brb, burst, catcher->len);
