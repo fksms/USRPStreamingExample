@@ -17,7 +17,7 @@ extern BlockingRingBuffer brb;
 void *reader_thread(void *arg) {
 
     int burst_count = 0;
-    while (atomic_load(&running) && burst_count < 30) {
+    while (atomic_load(&running) && burst_count < 20) {
         double complex *data = NULL;
         int length = 0;
 

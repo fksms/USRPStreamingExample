@@ -9,6 +9,7 @@
 
 #include "lfrb.h"
 #include "usrp.h"
+#include "writer.h"
 
 // ---------------------Status---------------------
 extern _Atomic bool running;
@@ -26,12 +27,10 @@ extern char *rx_antenna;
 // ------------------------------------------------
 
 // ------------------For USRP TX-------------------
-double tx_freq = 919e6;
-double tx_gain = 35.0;
+double tx_freq = 920e6;
+double tx_gain = 10.0;
 size_t tx_channel = 1;
 char *tx_antenna = "TX/RX";
-
-double send_time = 0.2; //[sec]
 // ------------------------------------------------
 
 // ---------------------Buffer---------------------
@@ -309,20 +308,65 @@ void *usrp_tx_thread(void *arg) {
     // タイムアウト時間
     double timeout = 3.0; //[sec]
 
+    // 送信するビット列
+    int n_bits = 800;
+    uint8_t bits[n_bits];
+    generate_bits(bits, n_bits);
+
+    // ガウスフィルタ係数の構築
+    int gauss_len = GAUSS_SPAN * (TX_SAMP_RATE / SYMBOL_RATE) + 1;
+    double gauss_coef[gauss_len];
+    build_gaussian_filter(gauss_coef, gauss_len);
+
+    // FSK/GFSK変調
+    int n_samples;
+    int sps = TX_SAMP_RATE / SYMBOL_RATE;
+    // (n_bits * sps)がTX_NUM_SAMPSの倍数になるように切り上げ
+    int iq_len_raw = 2 * n_bits * sps;
+    int iq_block = 2 * TX_NUM_SAMPS;
+    int iq_len = ((iq_len_raw + iq_block - 1) / iq_block) * iq_block; // 切り上げ
+
+    // 信号格納用
+    float iq[iq_len];
+    if (fsk_modulate(bits, n_bits, gauss_coef, gauss_len, iq, &n_samples, false) != 0) {
+        fprintf(stderr, "変調に失敗しました\n");
+        // データの変調に失敗した場合は強制終了
+        atomic_store(&running, false);
+        exit(EXIT_FAILURE);
+    }
+    // iq_lenの長さがn_samplesより長い場合は残りを0で埋める
+    for (int i = 2 * n_samples; i < iq_len; i++) {
+        iq[i] = 0.0f;
+    }
+
+    // IQデータをファイルに保存
+    write_iq_file("fsk_iq.csv", iq, iq_len);
+
     // 送信する信号のバッファ
     static int16_t send_buf[TX_NUM_SAMPS * 2];
 
     // 送信する信号を生成（例：I成分が1、Q成分が1の単純な信号）
-    for (size_t i = 0; i < TX_NUM_SAMPS; ++i) {
-        send_buf[2 * i] = 1;     // I成分
-        send_buf[2 * i + 1] = 1; // Q成分
+    // for (size_t i = 0; i < TX_NUM_SAMPS; ++i) {
+    //     send_buf[2 * i] = INT16_MAX; // I成分
+    //     send_buf[2 * i + 1] = 0;     // Q成分
+    // }
+
+    // float配列iqをint16_t配列に変換
+    for (int i = 0; i < iq_len; i++) {
+        // 1.0→32767, -1.0→-32768（クリッピング）
+        float val = iq[i];
+        if (val > 1.0f)
+            val = 1.0f;
+        if (val < -1.0f)
+            val = -1.0f;
+        send_buf[i] = (int16_t)(val * INT16_MAX);
     }
 
     // UHD は void* の配列を受け取る
     const void *buf_ptrs[1] = {send_buf};
 
     // 送信ループの回数を計算
-    int loop = (int)((send_time * TX_SAMP_RATE) / TX_NUM_SAMPS);
+    int loop = (int)(iq_len / 2 / TX_NUM_SAMPS);
 
     while (atomic_load(&running)) {
         for (int i = 0; i < loop; ++i) {
@@ -330,8 +374,8 @@ void *usrp_tx_thread(void *arg) {
             uhd_tx_streamer_send(usrp_tx->tx_streamer, buf_ptrs, TX_NUM_SAMPS, &usrp_tx->tx_metadata, timeout, &actual_num_samps);
         }
 
-        // 0.5秒スリープ
-        usleep(500000);
+        // 1秒スリープ
+        usleep(1000000);
 
         // center_freqを200kHz上げる
         tx_freq += 200e3;

@@ -13,7 +13,7 @@
  * ---------------------------------------------------------------*/
 #define RX_SAMP_RATE 10e6
 #define RX_NUM_SAMPS 1000
-#define TX_SAMP_RATE 500e3
+#define TX_SAMP_RATE 200e3
 #define TX_NUM_SAMPS 1000
 
 // USRP RX handle

@@ -15,3 +15,5 @@ _deps
 build
 
 .DS_Store
+
+*.csv
