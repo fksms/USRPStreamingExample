@@ -7,15 +7,9 @@
 #include <string.h>
 
 /* ---------------------------------------------------------------
- * INPUT_SAMPS: writerスレッドが1回で書き込むサンプル数
- * OUTPUT_SAMPS: Readerスレッドが1回で読み出すサンプル数
  * BUF_ELEM: バッファのサンプル数（2の冪乗）
  * ---------------------------------------------------------------*/
-#define INPUT_SAMPS 1000
-#define INPUT_ELEMS (INPUT_SAMPS * 2) // 2はIとQの分
-#define OUTPUT_SAMPS 30000
-#define OUTPUT_ELEMS (OUTPUT_SAMPS * 2) // 2はIとQの分
-#define BUF_ELEM 2097152                // 2^21
+#define BUF_ELEM 2097152 // 2^21
 #define BUF_MASK (BUF_ELEM - 1)
 
 // BUF_ELEMが2の冪乗でない場合はコンパイルエラー
@@ -39,7 +33,7 @@ typedef struct {
 } LockFreeRingBuffer;
 
 void lfrb_init(LockFreeRingBuffer *rb);
-bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src);
-bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst);
+bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src, int len);
+bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst, int len);
 
 #endif // __LFRB_H__

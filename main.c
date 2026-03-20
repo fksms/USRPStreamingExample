@@ -29,8 +29,6 @@ char *device_args = "";
 // ------------------For USRP RX-------------------
 // Center frequency
 double rx_freq = 924e6;
-// Sampling rate
-double rx_rate = 10e6;
 // Gain
 double rx_gain = 30.0;
 // Channel (0 or 1)
@@ -54,7 +52,6 @@ void print_help(void) {
                     "    -a (RX antenna)\n"
                     "    -c (RX channel)\n"
                     "    -f (RX frequency in Hz)\n"
-                    "    -r (RX sample rate in Hz)\n"
                     "    -g (RX gain)\n"
                     "    -h (print this help message)\n");
 }
@@ -62,7 +59,7 @@ void print_help(void) {
 int main(int argc, char *argv[]) {
     int option = 0;
     // Process options
-    while ((option = getopt(argc, argv, "d:a:c:f:r:g:h")) != -1) {
+    while ((option = getopt(argc, argv, "d:a:c:f:g:h")) != -1) {
         switch (option) {
         case 'd':
             device_args = strdup(optarg);
@@ -78,10 +75,6 @@ int main(int argc, char *argv[]) {
 
         case 'f':
             rx_freq = atof(optarg);
-            break;
-
-        case 'r':
-            rx_rate = atof(optarg);
             break;
 
         case 'g':

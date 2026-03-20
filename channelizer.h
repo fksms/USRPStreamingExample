@@ -3,22 +3,22 @@
 
 #include <fftw3.h>
 
-#include "lfrb.h"
-
 /* ---------------------------------------------------------------
+ * INPUT_SAMPS: チャネライザに入力するサンプル数
  * NUM_CHANNELS: 分解するチャンネル数
  * COEF_PER_STAGE: チャンネルあたりのFIRフィルタのtap数
  * KAISER_BETA: カイザー窓のbetaパラメータ
  * ---------------------------------------------------------------*/
+#define INPUT_SAMPS 30000
 #define NUM_CHANNELS 50
 #define COEF_PER_STAGE 16
 #define KAISER_BETA 8.6
 
-#define TIME_SLOTS (OUTPUT_SAMPS / NUM_CHANNELS)
+#define TIME_SLOTS (INPUT_SAMPS / NUM_CHANNELS)
 
-// OUTPUT_SAMPSがNUM_CHANNELSの倍数でない場合はコンパイルエラー
-#if (OUTPUT_SAMPS % NUM_CHANNELS) != 0
-#error "OUTPUT_SAMPS must be a multiple of NUM_CHANNELS"
+// INPUT_SAMPSがNUM_CHANNELSの倍数でない場合はコンパイルエラー
+#if (INPUT_SAMPS % NUM_CHANNELS) != 0
+#error "INPUT_SAMPS must be a multiple of NUM_CHANNELS"
 #endif
 
 typedef struct {

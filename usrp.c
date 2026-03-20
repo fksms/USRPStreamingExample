@@ -20,7 +20,6 @@ extern char *device_args;
 
 // ------------------For USRP RX-------------------
 extern double rx_freq;
-extern double rx_rate;
 extern double rx_gain;
 extern size_t rx_channel;
 extern char *rx_antenna;
@@ -28,7 +27,6 @@ extern char *rx_antenna;
 
 // ------------------For USRP TX-------------------
 double tx_freq = 919e6;
-double tx_rate = 1.0e6;
 double tx_gain = 35.0;
 size_t tx_channel = 1;
 char *tx_antenna = "TX/RX";
@@ -77,13 +75,14 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
     }
 
     // Set rate
-    error = uhd_usrp_set_rx_rate(usrp, rx_rate, rx_channel);
+    error = uhd_usrp_set_rx_rate(usrp, RX_SAMP_RATE, rx_channel);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // See what rate actually is
+    double rx_rate;
     error = uhd_usrp_get_rx_rate(usrp, rx_channel, &rx_rate);
     printf("Actual RX rate: %f Sps...\n", rx_rate);
     if (error) {
@@ -171,13 +170,14 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
     }
 
     // Set rate
-    error = uhd_usrp_set_tx_rate(usrp, tx_rate, tx_channel);
+    error = uhd_usrp_set_tx_rate(usrp, TX_SAMP_RATE, tx_channel);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // See what rate actually is
+    double tx_rate;
     error = uhd_usrp_get_tx_rate(usrp, tx_channel, &tx_rate);
     printf("Actual TX rate: %f Sps...\n", tx_rate);
     if (error) {
@@ -253,7 +253,7 @@ void *usrp_rx_thread(void *arg) {
     double timeout = 3.0; //[sec]
 
     // ストリーミングデータを格納するためのバッファ
-    static iq_sample_t recv_buf[INPUT_ELEMS];
+    static iq_sample_t recv_buf[RX_NUM_SAMPS * 2];
 
     // UHD は void* の配列を受け取る
     void *buf_ptrs[1] = {recv_buf};
@@ -268,21 +268,21 @@ void *usrp_rx_thread(void *arg) {
     // Actual streaming
     while (atomic_load(&running)) {
         // ストリームを受信
-        uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, INPUT_SAMPS, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
+        uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, RX_NUM_SAMPS, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
 
         // 受信サンプル数が想定と異なる場合
-        if (actual_num_samps != INPUT_SAMPS) {
+        if (actual_num_samps != RX_NUM_SAMPS) {
             // エラー有りの場合は解放して終了
             printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
             break;
 
             // エラー有りの場合はContinueする
             // printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
-            // memset(recv_buf + actual_num_samps * 2, 0, (INPUT_SAMPS - actual_num_samps) * sizeof(iq_sample_t) * 2);
+            // memset(recv_buf + actual_num_samps * 2, 0, (RX_NUM_SAMPS - actual_num_samps) * sizeof(iq_sample_t) * 2);
             // continue;
         }
 
-        if (!lfrb_write(&lfrb, recv_buf)) {
+        if (!lfrb_write(&lfrb, recv_buf, RX_NUM_SAMPS * 2)) {
             // バッファ溢れの場合
             printf("Ring buffer overflow.\n");
             break;
@@ -310,10 +310,10 @@ void *usrp_tx_thread(void *arg) {
     double timeout = 3.0; //[sec]
 
     // 送信する信号のバッファ
-    static int16_t send_buf[INPUT_ELEMS];
+    static int16_t send_buf[TX_NUM_SAMPS * 2];
 
     // 送信する信号を生成（例：I成分が1、Q成分が1の単純な信号）
-    for (size_t i = 0; i < INPUT_SAMPS; ++i) {
+    for (size_t i = 0; i < TX_NUM_SAMPS; ++i) {
         send_buf[2 * i] = 1;     // I成分
         send_buf[2 * i + 1] = 1; // Q成分
     }
@@ -322,12 +322,12 @@ void *usrp_tx_thread(void *arg) {
     const void *buf_ptrs[1] = {send_buf};
 
     // 送信ループの回数を計算
-    int loop = (int)((send_time * tx_rate) / INPUT_SAMPS);
+    int loop = (int)((send_time * TX_SAMP_RATE) / TX_NUM_SAMPS);
 
     while (atomic_load(&running)) {
         for (int i = 0; i < loop; ++i) {
             // ストリームを送信
-            uhd_tx_streamer_send(usrp_tx->tx_streamer, buf_ptrs, INPUT_SAMPS, &usrp_tx->tx_metadata, timeout, &actual_num_samps);
+            uhd_tx_streamer_send(usrp_tx->tx_streamer, buf_ptrs, TX_NUM_SAMPS, &usrp_tx->tx_metadata, timeout, &actual_num_samps);
         }
 
         // 0.5秒スリープ

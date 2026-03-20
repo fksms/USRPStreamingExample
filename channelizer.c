@@ -14,13 +14,10 @@
 #include "channelizer.h"
 #include "fir_kaiser.h"
 #include "lfrb.h"
+#include "usrp.h"
 
 // ---------------------Status---------------------
 extern _Atomic bool running;
-// ------------------------------------------------
-
-// --------------From USRP Streaming---------------
-extern double rx_rate;
 // ------------------------------------------------
 
 // ---------------------Buffer---------------------
@@ -56,17 +53,17 @@ void *channelizer_thread(void *arg) {
     // Channelizer handle
     channelizer_handle *handle = arg;
 
-    // `rx_rate`と`OUTPUT_SAMPS`から待機時間を計算
-    double wait_sec = (double)OUTPUT_SAMPS / rx_rate;
+    // `RX_SAMP_RATE`と`INPUT_SAMPS`から待機時間を計算
+    double wait_sec = (double)INPUT_SAMPS / RX_SAMP_RATE;
     time_t sec = (time_t)wait_sec;
     long nsec = (long)((wait_sec - sec) * 1e9);
     struct timespec ts = {sec, nsec};
 
     // リングバッファから読み取った信号を格納するためのバッファ
-    static iq_sample_t output_buf[OUTPUT_ELEMS];
+    static iq_sample_t output_buf[INPUT_SAMPS * 2];
 
     // 複素信号を格納するためのバッファ
-    static double complex complex_signal[OUTPUT_SAMPS];
+    static double complex complex_signal[INPUT_SAMPS];
 
     // 分割されたFIRフィルタ係数へのポインタ
     double(*split_filter)[COEF_PER_STAGE] = handle->split_filter;
@@ -104,14 +101,14 @@ void *channelizer_thread(void *arg) {
     static BurstCatcher burst_catcher[NUM_CHANNELS];
 
     while (atomic_load(&running)) {
-        if (!lfrb_read(&lfrb, output_buf)) {
+        if (!lfrb_read(&lfrb, output_buf, INPUT_SAMPS * 2)) {
             // バッファ空の場合
             nanosleep(&ts, NULL);
             continue;
         }
 
         // I, Q を複素数に変換
-        for (int j = 0; j < OUTPUT_SAMPS; ++j) {
+        for (int j = 0; j < INPUT_SAMPS; ++j) {
             complex_signal[j] = output_buf[2 * j] + output_buf[2 * j + 1] * I;
         }
 

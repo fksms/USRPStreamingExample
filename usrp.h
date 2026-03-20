@@ -5,6 +5,17 @@
 #include <stdio.h>
 #include <uhd.h>
 
+/* ---------------------------------------------------------------
+ * RX_SAMP_RATE: 受信時のサンプリングレート [Hz]
+ * RX_NUM_SAMPS: 1回の受信で取得するサンプル数
+ * TX_SAMP_RATE: 送信時のサンプリングレート [Hz]
+ * TX_NUM_SAMPS: 1回の送信で送るサンプル数
+ * ---------------------------------------------------------------*/
+#define RX_SAMP_RATE 10e6
+#define RX_NUM_SAMPS 1000
+#define TX_SAMP_RATE 500e3
+#define TX_NUM_SAMPS 1000
+
 // USRP RX handle
 typedef struct {
     // USRP handle
