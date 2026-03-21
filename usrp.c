@@ -8,9 +8,9 @@
 #include <uhd.h>
 
 #include "channelizer_test.h"
+#include "fsk.h"
 #include "lfrb.h"
 #include "usrp.h"
-#include "writer.h"
 
 // ---------------------Status---------------------
 extern _Atomic bool running;
@@ -121,7 +121,8 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
     }
 
     // Specify complex<int16_t> as the CPU format.
-    uhd_stream_args_t stream_args = {.cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &rx_channel, .n_channels = 1};
+    uhd_stream_args_t stream_args = {
+        .cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &rx_channel, .n_channels = 1};
 
     // Create RX streamer
     error = uhd_rx_streamer_make(&usrp_rx->rx_streamer);
@@ -216,7 +217,8 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
     }
 
     // Specify complex<int16_t> as the CPU format.
-    uhd_stream_args_t stream_args = {.cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &tx_channel, .n_channels = 1};
+    uhd_stream_args_t stream_args = {
+        .cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &tx_channel, .n_channels = 1};
 
     // Create TX streamer
     error = uhd_tx_streamer_make(&usrp_tx->tx_streamer);
@@ -268,7 +270,8 @@ void *usrp_rx_thread(void *arg) {
     // Actual streaming
     while (atomic_load(&running)) {
         // ストリームを受信
-        uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, RX_NUM_SAMPS, &usrp_rx->rx_metadata, timeout, false, &actual_num_samps);
+        uhd_rx_streamer_recv(usrp_rx->rx_streamer, buf_ptrs, RX_NUM_SAMPS, &usrp_rx->rx_metadata, timeout, false,
+                             &actual_num_samps);
 
         // 受信サンプル数が想定と異なる場合
         if (actual_num_samps != RX_NUM_SAMPS) {
@@ -378,7 +381,8 @@ void *usrp_tx_thread(void *arg) {
     while (atomic_load(&running)) {
         for (int i = 0; i < loop; ++i) {
             // ストリームを送信
-            uhd_tx_streamer_send(usrp_tx->tx_streamer, buf_ptrs, TX_NUM_SAMPS, &usrp_tx->tx_metadata, timeout, &actual_num_samps);
+            uhd_tx_streamer_send(usrp_tx->tx_streamer, buf_ptrs, TX_NUM_SAMPS, &usrp_tx->tx_metadata, timeout,
+                                 &actual_num_samps);
         }
 
         // 1秒スリープ

@@ -12,8 +12,8 @@
 
 #include "channelizer.h"
 #include "channelizer_test.h"
+#include "fsk.h"
 #include "usrp.h"
-#include "writer.h"
 
 // チャネルの間隔をHz単位で計算して返す
 static double get_channel_spacing_hz(void) { return RX_SAMP_RATE / NUM_CHANNELS; }
@@ -26,7 +26,7 @@ static double get_self_test_frequency_hz(int sorted_position, int sorted_len) {
 
 // テスト用の単一トーン信号を生成してcomplex_signalに格納する
 static void fill_tone_block(double complex *complex_signal, double tone_hz) {
-    const double sample_rate_hz = RX_SAMP_RATE;
+    const double sample_rate_hz = TX_SAMP_RATE;
     const double amplitude = 0.8;
     const double two_pi = 2 * M_PI;
 
@@ -50,7 +50,7 @@ int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
     get_sorted_channel_indices(NUM_CHANNELS, sorted_idx);
 
     fprintf(stream, "Channelizer self-test start\n");
-    fprintf(stream, "  sample_rate = %.0f Hz\n", RX_SAMP_RATE);
+    fprintf(stream, "  sample_rate = %.0f Hz\n", TX_SAMP_RATE);
     fprintf(stream, "  num_channels = %d\n", NUM_CHANNELS);
     fprintf(stream, "  channel_spacing = %.0f Hz\n", get_channel_spacing_hz());
 
@@ -85,8 +85,10 @@ int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
 
         bool passed = (detected_channel == expected_channel);
 
-        fprintf(stream, "  [%s] tone=%+.0f Hz expected_ch=%d detected_ch=%d main_power=%.3e next_ch=%d next_power=%.3e\n", passed ? "PASS" : "FAIL", tone_hz, expected_channel, detected_channel,
-                max_power, second_channel, second_power);
+        fprintf(stream,
+                "  [%s] tone=%+.0f Hz expected_ch=%d detected_ch=%d main_power=%.3e next_ch=%d next_power=%.3e\n",
+                passed ? "PASS" : "FAIL", tone_hz, expected_channel, detected_channel, max_power, second_channel,
+                second_power);
 
         if (!passed) {
             failures++;
@@ -185,7 +187,8 @@ static int find_strongest_channel(const double power[NUM_CHANNELS], int *second_
 }
 
 // 送信ビット列と受信ビット列を、最もエラーが少なくなるようにシフトして重ね合わせ、エラー数と重なりサンプル数を返す
-static int align_bits_and_count_errors(const uint8_t *tx_bits, int tx_len, const uint8_t *rx_bits, int rx_len, int *best_shift, int *best_overlap) {
+static int align_bits_and_count_errors(const uint8_t *tx_bits, int tx_len, const uint8_t *rx_bits, int rx_len,
+                                       int *best_shift, int *best_overlap) {
     int min_errors = tx_len + rx_len + 1;
     int chosen_shift = 0;
     int chosen_overlap = 0;
@@ -218,14 +221,15 @@ static int align_bits_and_count_errors(const uint8_t *tx_bits, int tx_len, const
 }
 
 // 単一トーン信号を指定した搬送波周波数で変調し、チャネライザ入力用の複素信号を生成する
-static void build_shifted_modulated_block(const double complex *baseband, int n_samples, int start_sample, double carrier_hz, double complex *complex_signal) {
+static void build_shifted_modulated_block(const double complex *baseband, int n_samples, int start_sample,
+                                          double carrier_hz, double complex *complex_signal) {
     const double two_pi = 2 * M_PI;
 
     memset(complex_signal, 0, sizeof(double complex) * INPUT_SAMPS);
 
     for (int n = 0; n < n_samples && (start_sample + n) < INPUT_SAMPS; ++n) {
         int sample_index = start_sample + n;
-        double phase = two_pi * carrier_hz * (double)sample_index / RX_SAMP_RATE;
+        double phase = two_pi * carrier_hz * (double)sample_index / TX_SAMP_RATE;
         double complex mixer = cos(phase) + sin(phase) * I;
         complex_signal[sample_index] = baseband[n] * mixer;
     }
@@ -245,9 +249,9 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
     double second_power;
     int second_channel;
     int failures = 0;
-    int input_sps = get_samples_per_symbol(RX_SAMP_RATE);
+    int input_sps = get_samples_per_symbol(TX_SAMP_RATE);
     int output_sps = get_samples_per_symbol(get_channel_spacing_hz());
-    int input_gauss_len = get_gaussian_filter_length(RX_SAMP_RATE);
+    int input_gauss_len = get_gaussian_filter_length(TX_SAMP_RATE);
     int output_gauss_len = get_gaussian_filter_length(get_channel_spacing_hz());
     int start_sample = input_sps * 8;
 
@@ -263,7 +267,8 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
 
     double input_gauss[input_gauss_len];
     double output_gauss[output_gauss_len];
-    if (build_gaussian_filter_for_rate(RX_SAMP_RATE, input_gauss, input_gauss_len) != 0 || build_gaussian_filter_for_rate(get_channel_spacing_hz(), output_gauss, output_gauss_len) != 0) {
+    if (build_gaussian_filter_for_rate(TX_SAMP_RATE, input_gauss, input_gauss_len) != 0 ||
+        build_gaussian_filter_for_rate(get_channel_spacing_hz(), output_gauss, output_gauss_len) != 0) {
         fprintf(stream, "Failed to build Gaussian filters for modem test\n");
         return -1;
     }
@@ -287,7 +292,8 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
         int detected_channel;
         double ber = 1.0;
 
-        if (fsk_modulate_at_rate(tx_bits, TEST_BITS, RX_SAMP_RATE, input_gauss, input_gauss_len, tx_baseband, &n_tx_samples, use_gaussian) != 0) {
+        if (fsk_modulate_at_rate(tx_bits, TEST_BITS, TX_SAMP_RATE, input_gauss, input_gauss_len, tx_baseband,
+                                 &n_tx_samples, use_gaussian) != 0) {
             fprintf(stream, "  [%s] modulation failed\n", name);
             failures++;
             continue;
@@ -306,7 +312,8 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
 
         detected_channel = find_strongest_channel(power, &second_channel, &second_power);
 
-        if (fsk_demodulate_at_rate(channelizer_out[channel], TIME_SLOTS, get_channel_spacing_hz(), output_gauss, output_gauss_len, rx_bits, TIME_SLOTS, use_gaussian, &n_rx_bits) != 0) {
+        if (fsk_demodulate_at_rate(channelizer_out[channel], TIME_SLOTS, get_channel_spacing_hz(), output_gauss,
+                                   output_gauss_len, rx_bits, TIME_SLOTS, use_gaussian, &n_rx_bits) != 0) {
             fprintf(stream, "  [%s] demodulation failed\n", name);
             failures++;
             continue;
@@ -318,8 +325,11 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
 
         bool passed = (detected_channel == channel) && (overlap >= TEST_BITS / 2) && (bit_errors == 0);
 
-        fprintf(stream, "  [%s] detected_ch=%d next_ch=%d next_power=%.3e recovered_bits=%d overlap=%d shift=%d bit_errors=%d ber=%.4f %s\n", name, detected_channel, second_channel, second_power,
-                n_rx_bits, overlap, best_shift, bit_errors, ber, passed ? "PASS" : "FAIL");
+        fprintf(stream,
+                "  [%s] detected_ch=%d next_ch=%d next_power=%.3e recovered_bits=%d overlap=%d shift=%d bit_errors=%d "
+                "ber=%.4f %s\n",
+                name, detected_channel, second_channel, second_power, n_rx_bits, overlap, best_shift, bit_errors, ber,
+                passed ? "PASS" : "FAIL");
 
         if (!passed)
             failures++;
