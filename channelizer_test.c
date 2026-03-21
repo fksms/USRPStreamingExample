@@ -26,14 +26,43 @@ static double get_self_test_frequency_hz(int sorted_position, int sorted_len) {
 
 // テスト用の単一トーン信号を生成してcomplex_signalに格納する
 static void fill_tone_block(double complex *complex_signal, double tone_hz) {
-    const double sample_rate_hz = TX_SAMP_RATE;
+    const double sample_rate_hz = RX_SAMP_RATE;
     const double amplitude = 0.8;
     const double two_pi = 2 * M_PI;
 
-    for (int n = 0; n < INPUT_SAMPS; ++n) {
+    for (int n = 0; n < BUFFER_SIZE; ++n) {
         double phase = two_pi * tone_hz * (double)n / sample_rate_hz;
         complex_signal[n] = amplitude * (cos(phase) + sin(phase) * I);
     }
+}
+
+// 送信側サンプル列を受信側サンプルレートへ線形補間で変換する
+static int resample_complex_linear(const double complex *src, int src_len, double src_rate_hz, double dst_rate_hz,
+                                   double complex *dst, int dst_capacity) {
+    if (src_len <= 1 || src_rate_hz <= 0.0 || dst_rate_hz <= 0.0)
+        return -1;
+
+    double ratio = dst_rate_hz / src_rate_hz;
+    int dst_len = (int)lround((double)src_len * ratio);
+    if (dst_len <= 1 || dst_len > dst_capacity)
+        return -1;
+
+    for (int n = 0; n < dst_len; ++n) {
+        double src_pos = (double)n / ratio;
+        int idx = (int)floor(src_pos);
+        double frac = src_pos - idx;
+
+        if (idx < 0)
+            idx = 0;
+        if (idx >= src_len - 1) {
+            dst[n] = src[src_len - 1];
+            continue;
+        }
+
+        dst[n] = src[idx] * (1.0 - frac) + src[idx + 1] * frac;
+    }
+
+    return dst_len;
 }
 
 // チャネライザのセルフテストを実行する
@@ -41,7 +70,7 @@ static void fill_tone_block(double complex *complex_signal, double tone_hz) {
 // テスト内容：
 //   50チャネルのチャネライザに対して、中心周波数がチャネルの中心に位置する単一トーン信号を入力し、最も強いチャネルが正しいかどうかを評価する
 int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
-    static double complex complex_signal[INPUT_SAMPS];
+    static double complex complex_signal[BUFFER_SIZE];
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS];
     int sorted_idx[NUM_CHANNELS];
     int sorted_len = get_valid_sorted_channel_count();
@@ -50,7 +79,7 @@ int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
     get_sorted_channel_indices(NUM_CHANNELS, sorted_idx);
 
     fprintf(stream, "Channelizer self-test start\n");
-    fprintf(stream, "  sample_rate = %.0f Hz\n", TX_SAMP_RATE);
+    fprintf(stream, "  sample_rate = %.0f Hz\n", RX_SAMP_RATE);
     fprintf(stream, "  num_channels = %d\n", NUM_CHANNELS);
     fprintf(stream, "  channel_spacing = %.0f Hz\n", get_channel_spacing_hz());
 
@@ -225,11 +254,11 @@ static void build_shifted_modulated_block(const double complex *baseband, int n_
                                           double carrier_hz, double complex *complex_signal) {
     const double two_pi = 2 * M_PI;
 
-    memset(complex_signal, 0, sizeof(double complex) * INPUT_SAMPS);
+    memset(complex_signal, 0, sizeof(double complex) * BUFFER_SIZE);
 
-    for (int n = 0; n < n_samples && (start_sample + n) < INPUT_SAMPS; ++n) {
+    for (int n = 0; n < n_samples && (start_sample + n) < BUFFER_SIZE; ++n) {
         int sample_index = start_sample + n;
-        double phase = two_pi * carrier_hz * (double)sample_index / TX_SAMP_RATE;
+        double phase = two_pi * carrier_hz * (double)sample_index / RX_SAMP_RATE;
         double complex mixer = cos(phase) + sin(phase) * I;
         complex_signal[sample_index] = baseband[n] * mixer;
     }
@@ -237,10 +266,9 @@ static void build_shifted_modulated_block(const double complex *baseband, int n_
 
 // チャネライザのモデムループバックテストを実行する
 int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel, FILE *stream) {
-    enum { TEST_BITS = 96 };
-
-    static double complex tx_baseband[INPUT_SAMPS];
-    static double complex complex_signal[INPUT_SAMPS];
+    static double complex tx_baseband[BUFFER_SIZE];
+    static double complex tx_resampled[BUFFER_SIZE];
+    static double complex complex_signal[BUFFER_SIZE];
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS];
     uint8_t tx_bits[TEST_BITS];
     uint8_t rx_bits[TIME_SLOTS];
@@ -249,18 +277,19 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
     double second_power;
     int second_channel;
     int failures = 0;
-    int input_sps = get_samples_per_symbol(TX_SAMP_RATE);
+    int tx_sps = get_samples_per_symbol(TX_SAMP_RATE);
+    int rx_sps = get_samples_per_symbol(RX_SAMP_RATE);
     int output_sps = get_samples_per_symbol(get_channel_spacing_hz());
     int input_gauss_len = get_gaussian_filter_length(TX_SAMP_RATE);
     int output_gauss_len = get_gaussian_filter_length(get_channel_spacing_hz());
-    int start_sample = input_sps * 8;
+    int start_sample = rx_sps * 8;
 
     if (!get_channel_center_hz(channel, &channel_center_hz)) {
         fprintf(stream, "Invalid test channel %d\n", channel);
         return -1;
     }
 
-    if (input_sps < 0 || output_sps < 0 || input_gauss_len < 0 || output_gauss_len < 0) {
+    if (tx_sps < 0 || rx_sps < 0 || output_sps < 0 || input_gauss_len < 0 || output_gauss_len < 0) {
         fprintf(stream, "Unsupported symbol/sample rate configuration\n");
         return -1;
     }
@@ -279,12 +308,13 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
     fprintf(stream, "  channel = %d\n", channel);
     fprintf(stream, "  center_frequency = %+.0f Hz\n", channel_center_hz);
     fprintf(stream, "  tx_bits = %d\n", TEST_BITS);
-    fprintf(stream, "  input_sps = %d, output_sps = %d\n", input_sps, output_sps);
+    fprintf(stream, "  tx_sps = %d, rx_sps = %d, output_sps = %d\n", tx_sps, rx_sps, output_sps);
 
     for (int mode = 0; mode < 2; ++mode) {
         bool use_gaussian = (mode == 1);
         const char *name = use_gaussian ? "GFSK" : "FSK";
         int n_tx_samples = 0;
+        int n_resampled_samples = 0;
         int n_rx_bits = 0;
         int best_shift = 0;
         int overlap = 0;
@@ -299,13 +329,22 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
             continue;
         }
 
-        if (start_sample + n_tx_samples > INPUT_SAMPS) {
+        n_resampled_samples =
+            resample_complex_linear(tx_baseband, n_tx_samples, TX_SAMP_RATE, RX_SAMP_RATE, tx_resampled, BUFFER_SIZE);
+        if (n_resampled_samples < 0) {
+            fprintf(stream, "  [%s] resampling failed\n", name);
+            failures++;
+            continue;
+        }
+
+        if (start_sample + n_resampled_samples > BUFFER_SIZE) {
             fprintf(stream, "  [%s] test waveform does not fit in one block\n", name);
             failures++;
             continue;
         }
 
-        build_shifted_modulated_block(tx_baseband, n_tx_samples, start_sample, channel_center_hz, complex_signal);
+        build_shifted_modulated_block(tx_resampled, n_resampled_samples, start_sample, channel_center_hz,
+                                      complex_signal);
 
         channelizer_reset(handle);
         channelizer_process_block(handle, complex_signal, channelizer_out, power);
