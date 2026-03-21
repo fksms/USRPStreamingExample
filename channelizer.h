@@ -39,7 +39,8 @@ int get_valid_sorted_channel_count(void);
 void get_sorted_channel_indices(int num_channels, int *sorted_idx);
 int channelizer_setup(channelizer_handle *handle);
 void channelizer_reset(channelizer_handle *handle);
-void channelizer_process_block(channelizer_handle *handle, const double complex *complex_signal, double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS], double power[NUM_CHANNELS]);
+void channelizer_process_block(channelizer_handle *handle, const double complex *complex_signal,
+                               double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS], double power[NUM_CHANNELS]);
 void *channelizer_thread(void *arg);
 int channelizer_close(channelizer_handle *handle);
 

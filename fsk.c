@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "writer.h"
+#include "fsk.h"
 
 // サンプルレートからシンボルあたりのサンプル数（SPS）を計算して返す
 int get_samples_per_symbol(double sample_rate_hz) {
@@ -81,7 +81,8 @@ int build_gaussian_filter_for_rate(double sample_rate_hz, double *gauss_coef, in
  *   *n_samples   : サンプル数
  *   戻り値       : 0=成功, -1=失敗
  */
-int fsk_modulate_at_rate(const uint8_t *bits, int n_bits, double sample_rate_hz, const double *gauss_coef, int gauss_len, double complex *iq_out, int *n_samples, bool use_gaussian) {
+int fsk_modulate_at_rate(const uint8_t *bits, int n_bits, double sample_rate_hz, const double *gauss_coef,
+                         int gauss_len, double complex *iq_out, int *n_samples, bool use_gaussian) {
     // サンプル/シンボル数を計算
     int sps = get_samples_per_symbol(sample_rate_hz);
     if (sps < 0)
@@ -168,8 +169,8 @@ int fsk_modulate_at_rate(const uint8_t *bits, int n_bits, double sample_rate_hz,
  *   *n_bits_out  : 復調ビット数
  *   戻り値       : 0=成功, -1=失敗
  */
-int fsk_demodulate_at_rate(const double complex *iq_in, int n_samples, double sample_rate_hz, const double *gauss_coef, int gauss_len, uint8_t *bits_out, int max_bits, bool use_gaussian,
-                           int *n_bits_out) {
+int fsk_demodulate_at_rate(const double complex *iq_in, int n_samples, double sample_rate_hz, const double *gauss_coef,
+                           int gauss_len, uint8_t *bits_out, int max_bits, bool use_gaussian, int *n_bits_out) {
     int sps = get_samples_per_symbol(sample_rate_hz);
     if (sps < 0 || n_samples < 2 || max_bits <= 0)
         return -1;

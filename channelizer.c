@@ -113,7 +113,8 @@ void channelizer_reset(channelizer_handle *handle) {
 // 周波数順に並べると以下のようなイメージ：
 //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
 //
-void channelizer_process_block(channelizer_handle *handle, const double complex *complex_signal, double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS], double power[NUM_CHANNELS]) {
+void channelizer_process_block(channelizer_handle *handle, const double complex *complex_signal,
+                               double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS], double power[NUM_CHANNELS]) {
     // 分割されたFIRフィルタ係数へのポインタ
     double(*split_filter)[COEF_PER_STAGE] = handle->split_filter;
 
@@ -178,7 +179,8 @@ void *channelizer_thread(void *arg) {
     double power[NUM_CHANNELS] = {0};
 
     // チャネル順並び替え用配列
-    // （channelizer_out の周波数配置は以下のコメントのようになっているので、周波数順に並び替えるためのインデックス配列を定義）
+    // （channelizer_out
+    // の周波数配置は以下のコメントのようになっているので、周波数順に並び替えるためのインデックス配列を定義）
     int sorted_idx[NUM_CHANNELS];
     get_sorted_channel_indices(NUM_CHANNELS, sorted_idx);
 
