@@ -10,6 +10,7 @@
 
 #include "brb.h"
 #include "channelizer.h"
+#include "channelizer_test.h"
 #include "lfrb.h"
 #include "reader.h"
 #include "usrp.h"
@@ -21,6 +22,11 @@
 _Atomic bool running = true;
 // ------------------------------------------------
 
+// --------------------For Test--------------------
+bool run_channelizer_self_test = false;
+int run_modem_loopback_channel = -1;
+// ------------------------------------------------
+
 // --------------------For USRP--------------------
 // Device args (e.g. "type=b200")
 char *device_args = "";
@@ -30,9 +36,9 @@ char *device_args = "";
 // Center frequency
 double rx_freq = 924e6;
 // Gain
-double rx_gain = 30.0;
+double rx_gain = 40.0;
 // Channel (0 or 1)
-size_t rx_channel = 0;
+size_t rx_channel = 1;
 // Antenna ("TX/RX" or "RX2")
 char *rx_antenna = "RX2";
 // ------------------------------------------------
@@ -53,13 +59,15 @@ void print_help(void) {
                     "    -c (RX channel)\n"
                     "    -f (RX frequency in Hz)\n"
                     "    -g (RX gain)\n"
+                    "    -m (run FSK/GFSK modem loopback self-test on channel and exit)\n"
+                    "    -t (run channelizer self-test and exit)\n"
                     "    -h (print this help message)\n");
 }
 
 int main(int argc, char *argv[]) {
     int option = 0;
     // Process options
-    while ((option = getopt(argc, argv, "d:a:c:f:g:h")) != -1) {
+    while ((option = getopt(argc, argv, "d:a:c:f:g:m:th")) != -1) {
         switch (option) {
         case 'd':
             device_args = strdup(optarg);
@@ -81,6 +89,14 @@ int main(int argc, char *argv[]) {
             rx_gain = atof(optarg);
             break;
 
+        case 'm':
+            run_modem_loopback_channel = atoi(optarg);
+            break;
+
+        case 't':
+            run_channelizer_self_test = true;
+            break;
+
         case 'h':
             print_help();
             return 0;
@@ -94,6 +110,25 @@ int main(int argc, char *argv[]) {
     // Init the ring buffer
     lfrb_init(&lfrb);
     brb_init(&brb);
+
+    // ----------------------------Test----------------------------
+    if (run_channelizer_self_test || run_modem_loopback_channel >= 0) {
+        channelizer_handle channelizer;
+        if (channelizer_setup(&channelizer)) {
+            printf("Setup channelizer failed\n");
+            return -1;
+        }
+
+        int rc;
+        if (run_channelizer_self_test) {
+            rc = channelizer_run_self_test(&channelizer, stdout);
+        } else {
+            rc = channelizer_run_modem_loopback_test(&channelizer, run_modem_loopback_channel, stdout);
+        }
+        channelizer_close(&channelizer);
+        return (rc == 0) ? 0 : -1;
+    }
+    // ------------------------------------------------------------
 
     // ----------------------------Setup---------------------------
     // USRP handle

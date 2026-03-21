@@ -7,6 +7,7 @@
 
 #include <uhd.h>
 
+#include "channelizer_test.h"
 #include "lfrb.h"
 #include "usrp.h"
 #include "writer.h"
@@ -314,25 +315,31 @@ void *usrp_tx_thread(void *arg) {
     generate_bits(bits, n_bits);
 
     // ガウスフィルタ係数の構築
-    int gauss_len = GAUSS_SPAN * (TX_SAMP_RATE / SYMBOL_RATE) + 1;
+    int sps = get_samples_per_symbol(TX_SAMP_RATE);
+    int gauss_len = get_gaussian_filter_length(TX_SAMP_RATE);
     double gauss_coef[gauss_len];
-    build_gaussian_filter(gauss_coef, gauss_len);
+    build_gaussian_filter_for_rate(TX_SAMP_RATE, gauss_coef, gauss_len);
 
     // FSK/GFSK変調
     int n_samples;
-    int sps = TX_SAMP_RATE / SYMBOL_RATE;
-    // (n_bits * sps)がTX_NUM_SAMPSの倍数になるように切り上げ
-    int iq_len_raw = 2 * n_bits * sps;
-    int iq_block = 2 * TX_NUM_SAMPS;
-    int iq_len = ((iq_len_raw + iq_block - 1) / iq_block) * iq_block; // 切り上げ
-
-    // 信号格納用
-    float iq[iq_len];
-    if (fsk_modulate(bits, n_bits, gauss_coef, gauss_len, iq, &n_samples, false) != 0) {
+    int iq_len_raw = n_bits * sps;
+    double complex iq_raw[iq_len_raw];
+    if (fsk_modulate_at_rate(bits, n_bits, TX_SAMP_RATE, gauss_coef, gauss_len, iq_raw, &n_samples, false) != 0) {
         fprintf(stderr, "変調に失敗しました\n");
         // データの変調に失敗した場合は強制終了
         atomic_store(&running, false);
         exit(EXIT_FAILURE);
+    }
+
+    // `iq_len_raw`が`TX_NUM_SAMPS`の倍数になるように切り上げ
+    int iq_block = 2 * TX_NUM_SAMPS;
+    int iq_len = ((iq_len_raw * 2 + iq_block - 1) / iq_block) * iq_block; // 切り上げ
+
+    // 信号格納用
+    float iq[iq_len];
+    for (int n = 0; n < n_samples; ++n) {
+        iq[2 * n] = (float)creal(iq_raw[n]);
+        iq[2 * n + 1] = (float)cimag(iq_raw[n]);
     }
     // iq_lenの長さがn_samplesより長い場合は残りを0で埋める
     for (int i = 2 * n_samples; i < iq_len; i++) {
