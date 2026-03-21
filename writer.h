@@ -1,7 +1,9 @@
 #ifndef __WRITER_H__
 #define __WRITER_H__
 
+#include <complex.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #define SYMBOL_RATE 50e3 // シンボルレート [bps]
@@ -9,9 +11,11 @@
 #define BT 0.5           // Gaussian BT積
 #define GAUSS_SPAN 4     // ガウスフィルタスパン [symbols]
 
-void generate_bits(uint8_t *bits, int len);
-void build_gaussian_filter(double *gauss_coef, int gauss_len);
-int fsk_modulate(const uint8_t *bits, int n_bits, double *gauss_coef, int gauss_len, float *iq_out, int *n_samples, bool use_gaussian);
-void write_iq_file(const char *path, const float *iq, int n);
+int get_samples_per_symbol(double sample_rate_hz);
+int get_gaussian_filter_length(double sample_rate_hz);
+int build_gaussian_filter_for_rate(double sample_rate_hz, double *gauss_coef, int gauss_len);
+int fsk_modulate_at_rate(const uint8_t *bits, int n_bits, double sample_rate_hz, const double *gauss_coef, int gauss_len, double complex *iq_out, int *n_samples, bool use_gaussian);
+int fsk_demodulate_at_rate(const double complex *iq_in, int n_samples, double sample_rate_hz, const double *gauss_coef, int gauss_len, uint8_t *bits_out, int max_bits, bool use_gaussian,
+                           int *n_bits_out);
 
 #endif // __WRITER_H__

@@ -1,6 +1,9 @@
 #ifndef __CHANNELIZER_H__
 #define __CHANNELIZER_H__
 
+#include <complex.h>
+#include <stdio.h>
+
 #include <fftw3.h>
 
 /* ---------------------------------------------------------------
@@ -14,9 +17,9 @@
 #define COEF_PER_STAGE 16
 #define KAISER_BETA 8.6
 
+// 1チャネルあたりの時間スロット数
+// （INPUT_SAMPSがNUM_CHANNELSの倍数でない場合はコンパイルエラー）
 #define TIME_SLOTS (INPUT_SAMPS / NUM_CHANNELS)
-
-// INPUT_SAMPSがNUM_CHANNELSの倍数でない場合はコンパイルエラー
 #if (INPUT_SAMPS % NUM_CHANNELS) != 0
 #error "INPUT_SAMPS must be a multiple of NUM_CHANNELS"
 #endif
@@ -24,14 +27,19 @@
 typedef struct {
     // 分割されたFIRフィルタ係数
     double split_filter[NUM_CHANNELS][COEF_PER_STAGE];
+    // Polyphase FIRの状態
+    double complex reg[NUM_CHANNELS][COEF_PER_STAGE];
     // FFTWの入出力配列とプラン
     fftw_complex in[NUM_CHANNELS];
     fftw_complex out[NUM_CHANNELS];
     fftw_plan plan;
 } channelizer_handle;
 
+int get_valid_sorted_channel_count(void);
 void get_sorted_channel_indices(int num_channels, int *sorted_idx);
 int channelizer_setup(channelizer_handle *handle);
+void channelizer_reset(channelizer_handle *handle);
+void channelizer_process_block(channelizer_handle *handle, const double complex *complex_signal, double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS], double power[NUM_CHANNELS]);
 void *channelizer_thread(void *arg);
 int channelizer_close(channelizer_handle *handle);
 
