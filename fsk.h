@@ -14,9 +14,9 @@
 int get_samples_per_symbol(double sample_rate_hz);
 int get_gaussian_filter_length(double sample_rate_hz);
 int build_gaussian_filter_for_rate(double sample_rate_hz, double *gauss_coef, int gauss_len);
-int fsk_modulate_at_rate(const uint8_t *bits, int n_bits, double sample_rate_hz, const double *gauss_coef,
-                         int gauss_len, double complex *iq_out, int *n_samples, bool use_gaussian);
-int fsk_demodulate_at_rate(const double complex *iq_in, int n_samples, double sample_rate_hz, const double *gauss_coef,
-                           int gauss_len, uint8_t *bits_out, int max_bits, bool use_gaussian, int *n_bits_out);
+int fsk_modulate_at_rate(const uint8_t *bits, int n_bits, double sample_rate_hz, bool use_gaussian,
+                         const double *gauss_coef, int gauss_len, double complex *iq_out, int *n_samples);
+int fsk_demodulate_at_rate(const double complex *iq_in, int n_samples, double sample_rate_hz, bool use_gaussian,
+                           const double *gauss_coef, int gauss_len, int max_bits, uint8_t *bits_out, int *n_bits_out);
 
 #endif // __FSK_H__

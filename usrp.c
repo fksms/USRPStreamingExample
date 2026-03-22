@@ -313,7 +313,7 @@ void *usrp_tx_thread(void *arg) {
     int n_samples;
     int iq_len_raw = n_bits * sps;
     double complex iq_raw[iq_len_raw];
-    if (fsk_modulate_at_rate(bits, n_bits, TX_SAMP_RATE, gauss_coef, gauss_len, iq_raw, &n_samples, false) != 0) {
+    if (fsk_modulate_at_rate(bits, n_bits, TX_SAMP_RATE, false, gauss_coef, gauss_len, iq_raw, &n_samples) != 0) {
         fprintf(stderr, "変調に失敗しました\n");
         // データの変調に失敗した場合は強制終了
         atomic_store(&running, false);
