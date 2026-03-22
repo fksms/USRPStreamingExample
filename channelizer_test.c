@@ -37,7 +37,7 @@ static void fill_tone_block(double complex *complex_signal, int len, double tone
 // テスト内容：
 //   50チャネルのチャネライザに対して、中心周波数がチャネルの中心に位置する単一トーン信号を入力し、最も強いチャネルが正しいかどうかを評価する
 int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
-    static double complex complex_signal[BUFFER_SIZE];
+    static double complex complex_signal[INPUT_SAMPS];
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS];
     int sorted_idx[NUM_CHANNELS];
     int sorted_len = get_valid_sorted_channel_count();
@@ -59,13 +59,13 @@ int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
         double max_power = -1.0;
         double second_power = -1.0;
 
-        fill_tone_block(complex_signal, BUFFER_SIZE, tone_hz, RX_SAMP_RATE);
+        fill_tone_block(complex_signal, INPUT_SAMPS, tone_hz, RX_SAMP_RATE);
         channelizer_reset(handle);
 
         // 最後の1ブロックを評価して初期過渡の影響を減らす
         for (int warmup = 0; warmup < 3; ++warmup) {
-            channelizer_process_block(handle, complex_signal, (double complex *)channelizer_out, power, NUM_CHANNELS,
-                                      TIME_SLOTS, COEF_PER_STAGE);
+            channelizer_process_block(NUM_CHANNELS, TIME_SLOTS, COEF_PER_STAGE, handle->reg, handle->split_filter,
+                                      &handle->fftw, complex_signal, (double complex *)channelizer_out, power);
         }
 
         for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
@@ -377,8 +377,8 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
         channelizer_reset(handle);
 
         // チャネライザ処理の実行
-        channelizer_process_block(handle, mixed_signal, (double complex *)channelizer_out, power, NUM_CHANNELS,
-                                  output_expected_len, COEF_PER_STAGE);
+        channelizer_process_block(NUM_CHANNELS, output_expected_len, COEF_PER_STAGE, handle->reg, handle->split_filter,
+                                  &handle->fftw, mixed_signal, (double complex *)channelizer_out, power);
 
         detected_channel = find_strongest_channel(power, &second_channel, &second_power);
 
