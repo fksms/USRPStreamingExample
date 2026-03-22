@@ -78,8 +78,8 @@ void channelizer_reset(channelizer_handle *handle) {
  * @return なし（void）
  */
 void channelizer_process_block(int num_channels, int time_slots, int coef_per_stage,
-                               double complex (*reg)[coef_per_stage], double (*split_filter)[coef_per_stage],
-                               fftw_handle *fftw, double complex *channelizer_in, double complex *channelizer_out,
+                               double complex (*reg)[coef_per_stage], const double (*split_filter)[coef_per_stage],
+                               fftw_handle *fftw, const double complex *channelizer_in, double complex *channelizer_out,
                                double *power_per_channel) {
 
     // チャネルごとの出力電力を初期化

@@ -354,8 +354,8 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
         double ber = 1.0;
 
         // 送信ビット列をFSK/GFSK変調してベースバンド信号を生成
-        if (fsk_modulate_at_rate(tx_bits, TEST_BITS, TX_SAMP_RATE, input_gauss, input_gauss_len, tx_baseband,
-                                 &n_tx_samples, use_gaussian) != 0) {
+        if (fsk_modulate_at_rate(tx_bits, TEST_BITS, TX_SAMP_RATE, use_gaussian, input_gauss, input_gauss_len,
+                                 tx_baseband, &n_tx_samples) != 0) {
             fprintf(stream, "  [%s] modulation failed\n", name);
             failures++;
             continue;
@@ -384,7 +384,7 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
 
         // 最も強いチャネルの出力をFSK/GFSK復調してビット列を回復
         if (fsk_demodulate_at_rate(channelizer_out[channel], output_expected_len, get_channel_spacing_hz(),
-                                   output_gauss, output_gauss_len, rx_bits, output_expected_len, use_gaussian,
+                                   use_gaussian, output_gauss, output_gauss_len, output_expected_len, rx_bits,
                                    &n_rx_bits) != 0) {
             fprintf(stream, "  [%s] demodulation failed\n", name);
             failures++;
