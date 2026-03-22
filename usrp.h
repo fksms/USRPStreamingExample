@@ -13,11 +13,21 @@
  * ---------------------------------------------------------------*/
 #define RX_SAMP_RATE 10e6
 #define RX_NUM_SAMPS 1000
-#define TX_SAMP_RATE 500e3
+#define TX_SAMP_RATE 400e3
 #define TX_NUM_SAMPS 1000
 
 // USRP RX handle
 typedef struct {
+    // Center frequency
+    double rx_freq;
+    // Gain
+    double rx_gain;
+    // Sampling rate
+    double rx_samp_rate;
+    // Channel (0 or 1)
+    size_t rx_channel;
+    // Antenna ("TX/RX" or "RX2")
+    char *rx_antenna;
     // USRP handle
     uhd_usrp_handle usrp;
     // RX streamer handle
@@ -28,6 +38,16 @@ typedef struct {
 
 // USRP TX handle
 typedef struct {
+    // Center frequency
+    double tx_freq;
+    // Gain
+    double tx_gain;
+    // Sampling rate
+    double tx_samp_rate;
+    // Channel (0 or 1)
+    size_t tx_channel;
+    // Antenna ("TX/RX" or "RX2")
+    char *tx_antenna;
     // USRP handle
     uhd_usrp_handle usrp;
     // TX streamer handle

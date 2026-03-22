@@ -25,14 +25,19 @@
 #endif
 
 typedef struct {
-    // 分割されたFIRフィルタ係数
-    double split_filter[NUM_CHANNELS][COEF_PER_STAGE];
-    // Polyphase FIRの状態
-    double complex reg[NUM_CHANNELS][COEF_PER_STAGE];
     // FFTWの入出力配列とプラン
     fftw_complex in[NUM_CHANNELS];
     fftw_complex out[NUM_CHANNELS];
     fftw_plan plan;
+} fftw_handle;
+
+typedef struct {
+    // 分割されたFIRフィルタ係数
+    double split_filter[NUM_CHANNELS][COEF_PER_STAGE];
+    // Polyphase FIRの状態
+    double complex reg[NUM_CHANNELS][COEF_PER_STAGE];
+    // FFTWのhandle
+    fftw_handle fftw;
 } channelizer_handle;
 
 double get_channel_spacing_hz(void);
@@ -40,9 +45,10 @@ int get_valid_sorted_channel_count(void);
 void get_sorted_channel_indices(int num_channels, int *sorted_idx);
 int channelizer_setup(channelizer_handle *handle);
 void channelizer_reset(channelizer_handle *handle);
-void channelizer_process_block(channelizer_handle *handle, const double complex *complex_signal,
-                               double complex *channelizer_out, double *power, int num_channels, int time_slots,
-                               int coef_per_stage);
+void channelizer_process_block(int num_channels, int time_slots, int coef_per_stage,
+                               double complex (*reg)[coef_per_stage], double (*split_filter)[coef_per_stage],
+                               fftw_handle *fftw, double complex *channelizer_in, double complex *channelizer_out,
+                               double *power_per_channel);
 void *channelizer_thread(void *arg);
 int channelizer_close(channelizer_handle *handle);
 

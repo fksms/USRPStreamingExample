@@ -22,25 +22,9 @@
 _Atomic bool running = true;
 // ------------------------------------------------
 
-// --------------------For Test--------------------
-bool run_channelizer_self_test = false;
-int run_modem_loopback_channel = -1;
-// ------------------------------------------------
-
 // --------------------For USRP--------------------
 // Device args (e.g. "type=b200")
 char *device_args = "";
-// ------------------------------------------------
-
-// ------------------For USRP RX-------------------
-// Center frequency
-double rx_freq = 924e6;
-// Gain
-double rx_gain = 40.0;
-// Channel (0 or 1)
-size_t rx_channel = 1;
-// Antenna ("TX/RX" or "RX2")
-char *rx_antenna = "RX2";
 // ------------------------------------------------
 
 // ---------------------Buffer---------------------
@@ -66,6 +50,27 @@ void print_help(void) {
 
 int main(int argc, char *argv[]) {
     int option = 0;
+    // ------------------For USRP RX-------------------
+    double rx_freq = 924e6;
+    double rx_gain = 40.0;
+    size_t rx_channel = 1;
+    char *rx_antenna = "RX2";
+    // ------------------------------------------------
+
+#ifdef TX_TEST
+    // ------------------For USRP TX-------------------
+    double tx_freq = 920e6;
+    double tx_gain = 10.0;
+    size_t tx_channel = 1;
+    char *tx_antenna = "TX/RX";
+    // ------------------------------------------------
+#endif // TX_TEST
+
+    // --------------------For Test--------------------
+    bool run_channelizer_self_test = false;
+    int run_modem_loopback_channel = -1;
+    // ------------------------------------------------
+
     // Process options
     while ((option = getopt(argc, argv, "d:a:c:f:g:m:th")) != -1) {
         switch (option) {
@@ -142,6 +147,11 @@ int main(int argc, char *argv[]) {
 
     // USRP RX handle
     uhd_usrp_rx_handle usrp_rx = {
+        .rx_freq = rx_freq,
+        .rx_gain = rx_gain,
+        .rx_samp_rate = RX_SAMP_RATE,
+        .rx_channel = rx_channel,
+        .rx_antenna = rx_antenna,
         .usrp = usrp,
         .rx_streamer = NULL,
         .rx_metadata = NULL,
@@ -156,6 +166,11 @@ int main(int argc, char *argv[]) {
 #ifdef TX_TEST
     // USRP TX handle
     uhd_usrp_tx_handle usrp_tx = {
+        .tx_freq = tx_freq,
+        .tx_gain = tx_gain,
+        .tx_samp_rate = TX_SAMP_RATE,
+        .tx_channel = tx_channel,
+        .tx_antenna = tx_antenna,
         .usrp = usrp,
         .tx_streamer = NULL,
         .tx_metadata = NULL,

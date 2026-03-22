@@ -49,7 +49,7 @@ int channelizer_setup(channelizer_handle *handle) {
     }
 
     // FFTWプランの作成
-    handle->plan = fftw_plan_dft_1d(NUM_CHANNELS, handle->in, handle->out, FFTW_FORWARD, FFTW_MEASURE);
+    handle->fftw.plan = fftw_plan_dft_1d(NUM_CHANNELS, handle->fftw.in, handle->fftw.out, FFTW_FORWARD, FFTW_MEASURE);
     channelizer_reset(handle);
 
     return 0;
@@ -58,102 +58,115 @@ int channelizer_setup(channelizer_handle *handle) {
 // チャネライザで使用するレジスタの初期化
 void channelizer_reset(channelizer_handle *handle) {
     memset(handle->reg, 0, sizeof(handle->reg));
-    memset(handle->in, 0, sizeof(handle->in));
-    memset(handle->out, 0, sizeof(handle->out));
+    memset(handle->fftw.in, 0, sizeof(handle->fftw.in));
+    memset(handle->fftw.out, 0, sizeof(handle->fftw.out));
 }
 
-// チャネライザのコア処理
-// （出力配列 channelizer_out の周波数配置は以下のようになる）
-//
-//
-// - 偶数チャネル（NUM_CHANNELS=2N）の場合
-//
-// [low freq] ↑
-//   channelizer_out[N+1]
-//   channelizer_out[N+2]
-//   ...
-//   channelizer_out[2N-1]
-//   channelizer_out[0] (Center Frequency)
-//   channelizer_out[1]
-//   ...
-//   channelizer_out[N-2]
-//   channelizer_out[N-1]
-// ↓ [high freq]
-//
-// ※channelizer_out[N] は、低い方と高い方の両端が重なっており、両方の周波数成分が半分ずつ含まれている（折り返し点）
-//
-// 例：NUM_CHANNELS=8 の場合
-//   channelizer_out[0] ...中心周波数
-//   channelizer_out[5] ～ channelizer_out[7] ...低周波側
-//   channelizer_out[1] ～ channelizer_out[3] ...高周波側
-//   channelizer_out[4] ...低・高周波の折り返し
-//
-// 周波数順に並べると以下のようなイメージ：
-//   [low freq] channelizer_out[5] [6] [7] [0] [1] [2] [3] [high freq]
-//
-//
-// - 奇数チャネル（NUM_CHANNELS=2N+1）の場合
-//
-// [low freq] ↑
-//   channelizer_out[N+1]
-//   channelizer_out[N+2]
-//   ...
-//   channelizer_out[2N]
-//   channelizer_out[0] (Center Frequency)
-//   channelizer_out[1]
-//   ...
-//   channelizer_out[N-1]
-//   channelizer_out[N]
-// ↓ [high freq]
-//
-// ※奇数の場合は折り返し点（両端が重なる点）は存在しない
-//
-// 例：NUM_CHANNELS=7 の場合
-//   channelizer_out[0] ...中心周波数
-//   channelizer_out[4] ～ channelizer_out[6] ...低周波側
-//   channelizer_out[1] ～ channelizer_out[3] ...高周波側
-//
-// 周波数順に並べると以下のようなイメージ：
-//   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
-//
-void channelizer_process_block(channelizer_handle *handle, const double complex *complex_signal,
-                               double complex *channelizer_out, double *power, int num_channels, int time_slots,
-                               int coef_per_stage) {
-    // 分割されたFIRフィルタ係数へのポインタ
-    double(*split_filter)[coef_per_stage] = (double(*)[coef_per_stage])handle->split_filter;
+/**
+ * @brief ポリフェーズチャネライザの1ブロック処理を行う
+ *
+ * @param num_channels      分解するチャンネル数
+ * @param time_slots        1チャネルあたりの時間スロット数
+ * @param coef_per_stage    1チャネルあたりのFIRフィルタタップ数（可変）
+ * @param reg               [num_channels][coef_per_stage] 各チャネルのFIRレジスタ配列
+ * @param split_filter      [num_channels][coef_per_stage] 各チャネル用に分割されたFIR係数配列
+ * @param fftw              FFTW入出力バッファ・プランをまとめた構造体へのポインタ
+ * @param channelizer_in    [num_channels * time_slots] 入力複素信号配列
+ * @param channelizer_out   [num_channels][time_slots] 出力複素信号配列（周波数チャネルごと）
+ * @param power_per_channel [num_channels] 各チャネルの出力電力を格納する配列
+ *
+ * @return なし（void）
+ */
+void channelizer_process_block(int num_channels, int time_slots, int coef_per_stage,
+                               double complex (*reg)[coef_per_stage], double (*split_filter)[coef_per_stage],
+                               fftw_handle *fftw, double complex *channelizer_in, double complex *channelizer_out,
+                               double *power_per_channel) {
 
     // チャネルごとの出力電力を初期化
-    memset(power, 0, sizeof(double) * num_channels);
+    memset(power_per_channel, 0, sizeof(double) * num_channels);
 
     for (int nn = 0; nn < time_slots; ++nn) {
         // 各チャネルのレジスタを更新
         for (int ch = 0; ch < num_channels; ++ch) {
             for (int kk = coef_per_stage - 1; kk > 0; --kk) {
-                handle->reg[ch][kk] = handle->reg[ch][kk - 1];
+                reg[ch][kk] = reg[ch][kk - 1];
             }
-            handle->reg[ch][0] = complex_signal[nn * num_channels + ch];
+            reg[ch][0] = channelizer_in[nn * num_channels + ch];
         }
 
         // FIR出力をFFT入力へ格納
         for (int ch = 0; ch < num_channels; ++ch) {
             double complex filter_output = 0.0;
             for (int kk = 0; kk < coef_per_stage; ++kk) {
-                filter_output += handle->reg[ch][kk] * split_filter[ch][kk];
+                filter_output += reg[ch][kk] * split_filter[ch][kk];
             }
-            handle->in[ch] = filter_output;
+            fftw->in[ch] = filter_output;
         }
 
         // FFTを実行
-        fftw_execute(handle->plan);
+        fftw_execute(fftw->plan);
 
         // チャネルごとに出力を保存し、電力を計算
         for (int ch = 0; ch < num_channels; ++ch) {
-            ((double complex(*)[time_slots])channelizer_out)[ch][nn] = handle->out[ch];
-            double re = creal(handle->out[ch]);
-            double im = cimag(handle->out[ch]);
-            power[ch] += re * re + im * im;
+            ((double complex(*)[time_slots])channelizer_out)[ch][nn] = fftw->out[ch];
+            double re = creal(fftw->out[ch]);
+            double im = cimag(fftw->out[ch]);
+            power_per_channel[ch] += re * re + im * im;
         }
     }
+
+    // （出力配列 channelizer_out の周波数配置は以下を参照）
+    //
+    //
+    // - 偶数チャネル（NUM_CHANNELS=2N）の場合
+    //
+    // [low freq] ↑
+    //   channelizer_out[N+1]
+    //   channelizer_out[N+2]
+    //   ...
+    //   channelizer_out[2N-1]
+    //   channelizer_out[0] (Center Frequency)
+    //   channelizer_out[1]
+    //   ...
+    //   channelizer_out[N-2]
+    //   channelizer_out[N-1]
+    // ↓ [high freq]
+    //
+    // ※channelizer_out[N] は、低い方と高い方の両端が重なっており、両方の周波数成分が半分ずつ含まれている（折り返し点）
+    //
+    // 例：NUM_CHANNELS=8 の場合
+    //   channelizer_out[0] ...中心周波数
+    //   channelizer_out[5] ～ channelizer_out[7] ...低周波側
+    //   channelizer_out[1] ～ channelizer_out[3] ...高周波側
+    //   channelizer_out[4] ...低・高周波の折り返し
+    //
+    // 周波数順に並べると以下のようなイメージ：
+    //   [low freq] channelizer_out[5] [6] [7] [0] [1] [2] [3] [high freq]
+    //
+    //
+    // - 奇数チャネル（NUM_CHANNELS=2N+1）の場合
+    //
+    // [low freq] ↑
+    //   channelizer_out[N+1]
+    //   channelizer_out[N+2]
+    //   ...
+    //   channelizer_out[2N]
+    //   channelizer_out[0] (Center Frequency)
+    //   channelizer_out[1]
+    //   ...
+    //   channelizer_out[N-1]
+    //   channelizer_out[N]
+    // ↓ [high freq]
+    //
+    // ※奇数の場合は折り返し点（両端が重なる点）は存在しない
+    //
+    // 例：NUM_CHANNELS=7 の場合
+    //   channelizer_out[0] ...中心周波数
+    //   channelizer_out[4] ～ channelizer_out[6] ...低周波側
+    //   channelizer_out[1] ～ channelizer_out[3] ...高周波側
+    //
+    // 周波数順に並べると以下のようなイメージ：
+    //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
 }
 
 // チャネライザのスレッド関数
@@ -214,8 +227,8 @@ void *channelizer_thread(void *arg) {
         }
 
         // チャネライザ処理
-        channelizer_process_block(handle, complex_signal, (double complex *)channelizer_out, power, NUM_CHANNELS,
-                                  TIME_SLOTS, COEF_PER_STAGE);
+        channelizer_process_block(NUM_CHANNELS, TIME_SLOTS, COEF_PER_STAGE, handle->reg, handle->split_filter,
+                                  &handle->fftw, complex_signal, (double complex *)channelizer_out, power);
 
         // -------------------------- CFAR ---------------------------
         // 概要：
@@ -360,7 +373,7 @@ void *channelizer_thread(void *arg) {
 // チャネライザのクリーンアップ
 int channelizer_close(channelizer_handle *handle) {
     // FFTWプランの破棄
-    fftw_destroy_plan(handle->plan);
+    fftw_destroy_plan(handle->fftw.plan);
 
     return 0;
 }

@@ -20,20 +20,6 @@ extern _Atomic bool running;
 extern char *device_args;
 // ------------------------------------------------
 
-// ------------------For USRP RX-------------------
-extern double rx_freq;
-extern double rx_gain;
-extern size_t rx_channel;
-extern char *rx_antenna;
-// ------------------------------------------------
-
-// ------------------For USRP TX-------------------
-double tx_freq = 920e6;
-double tx_gain = 10.0;
-size_t tx_channel = 1;
-char *tx_antenna = "TX/RX";
-// ------------------------------------------------
-
 // ---------------------Buffer---------------------
 extern LockFreeRingBuffer lfrb;
 // ------------------------------------------------
@@ -61,21 +47,21 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
 
     // Create other necessary structs
     uhd_tune_request_t tune_request = {
-        .target_freq = rx_freq,
+        .target_freq = usrp_rx->rx_freq,
         .rf_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
         .dsp_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
     };
     uhd_tune_result_t tune_result;
 
     // Set antenna
-    error = uhd_usrp_set_rx_antenna(usrp, rx_antenna, rx_channel);
+    error = uhd_usrp_set_rx_antenna(usrp, usrp_rx->rx_antenna, usrp_rx->rx_channel);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set rate
-    error = uhd_usrp_set_rx_rate(usrp, RX_SAMP_RATE, rx_channel);
+    error = uhd_usrp_set_rx_rate(usrp, RX_SAMP_RATE, usrp_rx->rx_channel);
     if (error) {
         printf("%u\n", error);
         return error;
@@ -83,7 +69,7 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
 
     // See what rate actually is
     double rx_rate;
-    error = uhd_usrp_get_rx_rate(usrp, rx_channel, &rx_rate);
+    error = uhd_usrp_get_rx_rate(usrp, usrp_rx->rx_channel, &rx_rate);
     printf("Actual RX rate: %f Sps...\n", rx_rate);
     if (error) {
         printf("%u\n", error);
@@ -91,30 +77,30 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
     }
 
     // Set gain
-    error = uhd_usrp_set_rx_gain(usrp, rx_gain, rx_channel, "");
+    error = uhd_usrp_set_rx_gain(usrp, usrp_rx->rx_gain, usrp_rx->rx_channel, "");
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // See what gain actually is
-    error = uhd_usrp_get_rx_gain(usrp, rx_channel, "", &rx_gain);
-    printf("Actual RX gain: %f dB...\n", rx_gain);
+    error = uhd_usrp_get_rx_gain(usrp, usrp_rx->rx_channel, "", &usrp_rx->rx_gain);
+    printf("Actual RX gain: %f dB...\n", usrp_rx->rx_gain);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set frequency
-    error = uhd_usrp_set_rx_freq(usrp, &tune_request, rx_channel, &tune_result);
+    error = uhd_usrp_set_rx_freq(usrp, &tune_request, usrp_rx->rx_channel, &tune_result);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // See what frequency actually is
-    error = uhd_usrp_get_rx_freq(usrp, rx_channel, &rx_freq);
-    printf("Actual RX frequency: %f Hz...\n", rx_freq);
+    error = uhd_usrp_get_rx_freq(usrp, usrp_rx->rx_channel, &usrp_rx->rx_freq);
+    printf("Actual RX frequency: %f Hz...\n", usrp_rx->rx_freq);
     if (error) {
         printf("%u\n", error);
         return error;
@@ -122,7 +108,7 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
 
     // Specify complex<int16_t> as the CPU format.
     uhd_stream_args_t stream_args = {
-        .cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &rx_channel, .n_channels = 1};
+        .cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &usrp_rx->rx_channel, .n_channels = 1};
 
     // Create RX streamer
     error = uhd_rx_streamer_make(&usrp_rx->rx_streamer);
@@ -157,21 +143,21 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
 
     // Create other necessary structs
     uhd_tune_request_t tune_request = {
-        .target_freq = tx_freq,
+        .target_freq = usrp_tx->tx_freq,
         .rf_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
         .dsp_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
     };
     uhd_tune_result_t tune_result;
 
     // Set antenna
-    error = uhd_usrp_set_tx_antenna(usrp, tx_antenna, tx_channel);
+    error = uhd_usrp_set_tx_antenna(usrp, usrp_tx->tx_antenna, usrp_tx->tx_channel);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set rate
-    error = uhd_usrp_set_tx_rate(usrp, TX_SAMP_RATE, tx_channel);
+    error = uhd_usrp_set_tx_rate(usrp, TX_SAMP_RATE, usrp_tx->tx_channel);
     if (error) {
         printf("%u\n", error);
         return error;
@@ -179,7 +165,7 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
 
     // See what rate actually is
     double tx_rate;
-    error = uhd_usrp_get_tx_rate(usrp, tx_channel, &tx_rate);
+    error = uhd_usrp_get_tx_rate(usrp, usrp_tx->tx_channel, &tx_rate);
     printf("Actual TX rate: %f Sps...\n", tx_rate);
     if (error) {
         printf("%u\n", error);
@@ -187,30 +173,30 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
     }
 
     // Set gain
-    error = uhd_usrp_set_tx_gain(usrp, tx_gain, tx_channel, "");
+    error = uhd_usrp_set_tx_gain(usrp, usrp_tx->tx_gain, usrp_tx->tx_channel, "");
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // See what gain actually is
-    error = uhd_usrp_get_tx_gain(usrp, tx_channel, "", &tx_gain);
-    printf("Actual TX gain: %f dB...\n", tx_gain);
+    error = uhd_usrp_get_tx_gain(usrp, usrp_tx->tx_channel, "", &usrp_tx->tx_gain);
+    printf("Actual TX gain: %f dB...\n", usrp_tx->tx_gain);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // Set frequency
-    error = uhd_usrp_set_tx_freq(usrp, &tune_request, tx_channel, &tune_result);
+    error = uhd_usrp_set_tx_freq(usrp, &tune_request, usrp_tx->tx_channel, &tune_result);
     if (error) {
         printf("%u\n", error);
         return error;
     }
 
     // See what frequency actually is
-    error = uhd_usrp_get_tx_freq(usrp, tx_channel, &tx_freq);
-    printf("Actual TX frequency: %f Hz...\n", tx_freq);
+    error = uhd_usrp_get_tx_freq(usrp, usrp_tx->tx_channel, &usrp_tx->tx_freq);
+    printf("Actual TX frequency: %f Hz...\n", usrp_tx->tx_freq);
     if (error) {
         printf("%u\n", error);
         return error;
@@ -218,7 +204,7 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
 
     // Specify complex<int16_t> as the CPU format.
     uhd_stream_args_t stream_args = {
-        .cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &tx_channel, .n_channels = 1};
+        .cpu_format = "sc16", .otw_format = "sc16", .args = "", .channel_list = &usrp_tx->tx_channel, .n_channels = 1};
 
     // Create TX streamer
     error = uhd_tx_streamer_make(&usrp_tx->tx_streamer);
@@ -389,24 +375,24 @@ void *usrp_tx_thread(void *arg) {
         usleep(1000000);
 
         // center_freqを200kHz上げる
-        tx_freq += 200e3;
+        usrp_tx->tx_freq += 200e3;
 
         // Set frequency
         uhd_tune_request_t tune_request = {
-            .target_freq = tx_freq,
+            .target_freq = usrp_tx->tx_freq,
             .rf_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
             .dsp_freq_policy = UHD_TUNE_REQUEST_POLICY_AUTO,
         };
         uhd_tune_result_t tune_result;
 
         // Set frequency
-        uhd_error error = uhd_usrp_set_tx_freq(usrp_tx->usrp, &tune_request, tx_channel, &tune_result);
+        uhd_error error = uhd_usrp_set_tx_freq(usrp_tx->usrp, &tune_request, usrp_tx->tx_channel, &tune_result);
         if (error) {
             printf("TX freq set error: %u\n", error);
             break;
         }
 
-        printf("TX freq changed: %f Hz\n", tx_freq);
+        printf("TX freq changed: %f Hz\n", usrp_tx->tx_freq);
     }
 
     // Stop
