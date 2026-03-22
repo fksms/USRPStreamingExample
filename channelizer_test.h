@@ -6,7 +6,7 @@
 
 #include "channelizer.h"
 
-#define TEST_BITS 300  // モデムループバックテストで使用するビット数
+#define TEST_BITS 1600 // モデムループバックテストで使用するビット数
 #define PREAMBLE_LEN 8 // プリアンブルビット数
 
 void generate_bits(uint8_t *bits, int len);
