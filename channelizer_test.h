@@ -6,9 +6,9 @@
 
 #include "channelizer.h"
 
-#define TEST_BITS 150      // モデムループバックテストで使用するビット数
-#define PREAMBLE_LEN 8     // プリアンブルビット数
-#define BUFFER_SIZE 100000 // 送信信号と受信信号のバッファサイズ（余裕を持たせるため大きめに設定）
+#define TEST_BITS 150     // モデムループバックテストで使用するビット数
+#define PREAMBLE_LEN 8    // プリアンブルビット数
+#define BUFFER_SIZE 30000 // 送信信号と受信信号のバッファサイズ（余裕を持たせるため大きめに設定）
 
 void generate_bits(uint8_t *bits, int len);
 int channelizer_run_self_test(channelizer_handle *handle, FILE *stream);

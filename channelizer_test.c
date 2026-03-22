@@ -25,44 +25,15 @@ static double get_self_test_frequency_hz(int sorted_position, int sorted_len) {
 }
 
 // テスト用の単一トーン信号を生成してcomplex_signalに格納する
-static void fill_tone_block(double complex *complex_signal, double tone_hz) {
+static void fill_tone_block(double complex *complex_signal, int len, double tone_hz) {
     const double sample_rate_hz = RX_SAMP_RATE;
     const double amplitude = 0.8;
     const double two_pi = 2 * M_PI;
 
-    for (int n = 0; n < BUFFER_SIZE; ++n) {
+    for (int n = 0; n < len; ++n) {
         double phase = two_pi * tone_hz * (double)n / sample_rate_hz;
         complex_signal[n] = amplitude * (cos(phase) + sin(phase) * I);
     }
-}
-
-// 送信側サンプル列を受信側サンプルレートへ線形補間で変換する
-static int resample_complex_linear(const double complex *src, int src_len, double src_rate_hz, double dst_rate_hz,
-                                   double complex *dst, int dst_capacity) {
-    if (src_len <= 1 || src_rate_hz <= 0.0 || dst_rate_hz <= 0.0)
-        return -1;
-
-    double ratio = dst_rate_hz / src_rate_hz;
-    int dst_len = (int)lround((double)src_len * ratio);
-    if (dst_len <= 1 || dst_len > dst_capacity)
-        return -1;
-
-    for (int n = 0; n < dst_len; ++n) {
-        double src_pos = (double)n / ratio;
-        int idx = (int)floor(src_pos);
-        double frac = src_pos - idx;
-
-        if (idx < 0)
-            idx = 0;
-        if (idx >= src_len - 1) {
-            dst[n] = src[src_len - 1];
-            continue;
-        }
-
-        dst[n] = src[idx] * (1.0 - frac) + src[idx + 1] * frac;
-    }
-
-    return dst_len;
 }
 
 // チャネライザのセルフテストを実行する
@@ -92,7 +63,7 @@ int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
         double max_power = -1.0;
         double second_power = -1.0;
 
-        fill_tone_block(complex_signal, tone_hz);
+        fill_tone_block(complex_signal, BUFFER_SIZE, tone_hz);
         channelizer_reset(handle);
 
         // 最後の1ブロックを評価して初期過渡の影響を減らす
@@ -249,59 +220,122 @@ static int align_bits_and_count_errors(const uint8_t *tx_bits, int tx_len, const
     return min_errors;
 }
 
+// 送信側サンプル列を受信側サンプルレートへ線形補間で変換する
+static int resample_complex_linear(const double complex *src, int src_len, double src_rate_hz, double dst_rate_hz,
+                                   double complex *dst, int dst_capacity) {
+    if (src_len <= 1 || src_rate_hz <= 0.0 || dst_rate_hz <= 0.0)
+        return -1;
+
+    double ratio = dst_rate_hz / src_rate_hz;
+    int dst_len = (int)lround((double)src_len * ratio);
+    if (dst_len <= 1 || dst_len > dst_capacity)
+        return -1;
+
+    for (int n = 0; n < dst_len; ++n) {
+        double src_pos = (double)n / ratio;
+        int idx = (int)floor(src_pos);
+        double frac = src_pos - idx;
+
+        if (idx < 0)
+            idx = 0;
+        if (idx >= src_len - 1) {
+            dst[n] = src[src_len - 1];
+            continue;
+        }
+
+        dst[n] = src[idx] * (1.0 - frac) + src[idx + 1] * frac;
+    }
+
+    return dst_len;
+}
+
 // 単一トーン信号を指定した搬送波周波数で変調し、チャネライザ入力用の複素信号を生成する
-static void build_shifted_modulated_block(const double complex *baseband, int n_samples, int start_sample,
-                                          double carrier_hz, double complex *complex_signal) {
+static void build_shifted_modulated_block(const double complex *baseband, int n_samples, double src_rate_hz,
+                                          double carrier_hz, double complex *mixed_signal, int signal_capacity) {
     const double two_pi = 2 * M_PI;
 
-    memset(complex_signal, 0, sizeof(double complex) * BUFFER_SIZE);
+    memset(mixed_signal, 0, sizeof(double complex) * signal_capacity);
 
-    for (int n = 0; n < n_samples && (start_sample + n) < BUFFER_SIZE; ++n) {
-        int sample_index = start_sample + n;
-        double phase = two_pi * carrier_hz * (double)sample_index / RX_SAMP_RATE;
+    // 搬送波を乗算して周波数シフト
+    for (int n = 0; n < n_samples && n < signal_capacity; ++n) {
+        int sample_index = n;
+        double phase = two_pi * carrier_hz * (double)sample_index / src_rate_hz;
         double complex mixer = cos(phase) + sin(phase) * I;
-        complex_signal[sample_index] = baseband[n] * mixer;
+        mixed_signal[sample_index] = baseband[n] * mixer;
     }
 }
 
 // チャネライザのモデムループバックテストを実行する
 int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel, FILE *stream) {
-    static double complex tx_baseband[BUFFER_SIZE];
-    static double complex tx_resampled[BUFFER_SIZE];
-    static double complex complex_signal[BUFFER_SIZE];
-    static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS];
+    // 各SPSを計算
+    int tx_sps = get_samples_per_symbol(TX_SAMP_RATE);
+    int rx_sps = get_samples_per_symbol(RX_SAMP_RATE);
+    int output_sps = get_samples_per_symbol(get_channel_spacing_hz());
+    // 期待されるサンプル数を計算
+    int tx_expected_len = TEST_BITS * tx_sps;
+    int rx_expected_len = TEST_BITS * rx_sps;
+    int output_expected_len = TEST_BITS * output_sps;
+    // 各信号格納用バッファを確保
+    double complex *tx_baseband = malloc(sizeof(double complex) * tx_expected_len);
+    double complex *tx_upsampled = malloc(sizeof(double complex) * rx_expected_len);
+    double complex *mixed_signal = malloc(sizeof(double complex) * rx_expected_len);
+    double complex(*channelizer_out)[output_expected_len] =
+        malloc(sizeof(double complex) * NUM_CHANNELS * output_expected_len);
+    if (!tx_baseband || !tx_upsampled || !mixed_signal || !channelizer_out) {
+        fprintf(stream, "Memory allocation failed\n");
+        free(tx_baseband);
+        free(tx_upsampled);
+        free(mixed_signal);
+        free(channelizer_out);
+        return -1;
+    }
+    // 入力と出力データ用バッファを確保
     uint8_t tx_bits[TEST_BITS];
-    uint8_t rx_bits[TIME_SLOTS];
+    uint8_t rx_bits[output_expected_len];
+    // テスト用のガウスフィルタ係数の長さを計算
+    int input_gauss_len = get_gaussian_filter_length(TX_SAMP_RATE);
+    int output_gauss_len = get_gaussian_filter_length(get_channel_spacing_hz());
+    // チャネライザ出力の電力スペクトル格納用バッファ
     double power[NUM_CHANNELS];
+    // 結果表示用の変数
     double channel_center_hz;
     double second_power;
     int second_channel;
     int failures = 0;
-    int tx_sps = get_samples_per_symbol(TX_SAMP_RATE);
-    int rx_sps = get_samples_per_symbol(RX_SAMP_RATE);
-    int output_sps = get_samples_per_symbol(get_channel_spacing_hz());
-    int input_gauss_len = get_gaussian_filter_length(TX_SAMP_RATE);
-    int output_gauss_len = get_gaussian_filter_length(get_channel_spacing_hz());
-    int start_sample = rx_sps * 8;
 
+    // チャネル番号から中心周波数を計算
     if (!get_channel_center_hz(channel, &channel_center_hz)) {
         fprintf(stream, "Invalid test channel %d\n", channel);
+        free(tx_baseband);
+        free(tx_upsampled);
+        free(mixed_signal);
+        free(channelizer_out);
         return -1;
     }
 
     if (tx_sps < 0 || rx_sps < 0 || output_sps < 0 || input_gauss_len < 0 || output_gauss_len < 0) {
         fprintf(stream, "Unsupported symbol/sample rate configuration\n");
+        free(tx_baseband);
+        free(tx_upsampled);
+        free(mixed_signal);
+        free(channelizer_out);
         return -1;
     }
 
+    // ガウスフィルタ係数の構築
     double input_gauss[input_gauss_len];
     double output_gauss[output_gauss_len];
     if (build_gaussian_filter_for_rate(TX_SAMP_RATE, input_gauss, input_gauss_len) != 0 ||
         build_gaussian_filter_for_rate(get_channel_spacing_hz(), output_gauss, output_gauss_len) != 0) {
         fprintf(stream, "Failed to build Gaussian filters for modem test\n");
+        free(tx_baseband);
+        free(tx_upsampled);
+        free(mixed_signal);
+        free(channelizer_out);
         return -1;
     }
 
+    // テスト用のビット列を生成
     generate_bits(tx_bits, TEST_BITS);
 
     fprintf(stream, "Channelizer modem loopback test start\n");
@@ -322,6 +356,7 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
         int detected_channel;
         double ber = 1.0;
 
+        // 送信ビット列をFSK/GFSK変調してベースバンド信号を生成
         if (fsk_modulate_at_rate(tx_bits, TEST_BITS, TX_SAMP_RATE, input_gauss, input_gauss_len, tx_baseband,
                                  &n_tx_samples, use_gaussian) != 0) {
             fprintf(stream, "  [%s] modulation failed\n", name);
@@ -329,30 +364,30 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
             continue;
         }
 
-        n_resampled_samples =
-            resample_complex_linear(tx_baseband, n_tx_samples, TX_SAMP_RATE, RX_SAMP_RATE, tx_resampled, BUFFER_SIZE);
+        // 送信サンプル列を受信側のサンプルレートへアップサンプリング
+        n_resampled_samples = resample_complex_linear(tx_baseband, n_tx_samples, TX_SAMP_RATE, RX_SAMP_RATE,
+                                                      tx_upsampled, rx_expected_len);
         if (n_resampled_samples < 0) {
             fprintf(stream, "  [%s] resampling failed\n", name);
             failures++;
             continue;
         }
 
-        if (start_sample + n_resampled_samples > BUFFER_SIZE) {
-            fprintf(stream, "  [%s] test waveform does not fit in one block\n", name);
-            failures++;
-            continue;
-        }
-
-        build_shifted_modulated_block(tx_resampled, n_resampled_samples, start_sample, channel_center_hz,
-                                      complex_signal);
+        // 変調された信号を指定した搬送波（キャリア）周波数でシフトしてチャネライザ入力用の複素信号を生成
+        build_shifted_modulated_block(tx_upsampled, n_resampled_samples, RX_SAMP_RATE, channel_center_hz, mixed_signal,
+                                      rx_expected_len);
 
         channelizer_reset(handle);
-        channelizer_process_block(handle, complex_signal, channelizer_out, power);
+
+        // チャネライザ処理の実行
+        channelizer_process_block(handle, mixed_signal, channelizer_out, power);
 
         detected_channel = find_strongest_channel(power, &second_channel, &second_power);
 
-        if (fsk_demodulate_at_rate(channelizer_out[channel], TIME_SLOTS, get_channel_spacing_hz(), output_gauss,
-                                   output_gauss_len, rx_bits, TIME_SLOTS, use_gaussian, &n_rx_bits) != 0) {
+        // 最も強いチャネルの出力をFSK/GFSK復調してビット列を回復
+        if (fsk_demodulate_at_rate(channelizer_out[channel], output_expected_len, get_channel_spacing_hz(),
+                                   output_gauss, output_gauss_len, rx_bits, output_expected_len, use_gaussian,
+                                   &n_rx_bits) != 0) {
             fprintf(stream, "  [%s] demodulation failed\n", name);
             failures++;
             continue;
@@ -376,10 +411,18 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
 
     if (failures == 0) {
         fprintf(stream, "Channelizer modem loopback test passed\n");
+        free(tx_baseband);
+        free(tx_upsampled);
+        free(mixed_signal);
+        free(channelizer_out);
         return 0;
     }
 
     fprintf(stream, "Channelizer modem loopback test failed (%d case(s))\n", failures);
+    free(tx_baseband);
+    free(tx_upsampled);
+    free(mixed_signal);
+    free(channelizer_out);
     return -1;
 }
 
