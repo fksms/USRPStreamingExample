@@ -374,16 +374,82 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
         build_shifted_modulated_block(tx_upsampled, n_resampled_samples, RX_SAMP_RATE, channel_center_hz, mixed_signal,
                                       rx_expected_len);
 
+        // チャネライザの状態を初期化
         channelizer_reset(handle);
 
-        // チャネライザ処理の実行
-        channelizer_process_block(NUM_CHANNELS, output_expected_len, COEF_PER_STAGE, handle->reg, handle->split_filter,
-                                  &handle->fftw, mixed_signal, (double complex *)channelizer_out, power);
+        // -------------------- ここからチャネライザ処理の分割実行 --------------------
+        // 実際のチャネライザの処理では、入力された信号を必ず1回で処理できるとは限らないので、
+        // 入力された`mixed_signal`の長さが`INPUT_SAMPS`を超えた場合は分割を行い、足りない分は0埋めして
+        // チャネライザ処理を複数回実施する。そして、チャネライザの出力を最後に連結して出力する。
+
+        // 入力の総サンプル数
+        int total_input = n_resampled_samples;
+        // 1回のチャネライザ処理で扱うサンプル数
+        int input_block_size = INPUT_SAMPS;
+        // 処理済みのサンプル数
+        int processed_samples = 0;
+        // 1回のチャネライザ処理で期待される出力サンプル数
+        int output_expected_block_size = TIME_SLOTS;
+        // 期待される出力の総サンプル数
+        int total_output = output_expected_len;
+        // 出力のオフセット位置（連結用）
+        int output_offset = 0;
+
+        // 入力用一時バッファ
+        double complex input_block[input_block_size];
+
+        // 出力用バッファを0クリア
+        memset(channelizer_out[0], 0, sizeof(double complex) * NUM_CHANNELS * output_expected_len);
+        memset(power, 0, sizeof(double) * NUM_CHANNELS);
+
+        while (processed_samples < total_input) {
+            // 入力ブロックのサイズを決定（最後のブロックは足りない分を0埋め）
+            int block_len = input_block_size;
+            // ブロックの終端が総入力を超える場合は、ブロックサイズを調整する
+            if (processed_samples + block_len > total_input) {
+                block_len = total_input - processed_samples;
+            }
+            // 入力信号（`mixed_signal`）を入力用一時バッファ（`input_block`）にコピーし、足りない分は0埋め
+            memset(input_block, 0, sizeof(double complex) * input_block_size);
+            memcpy(input_block, &mixed_signal[processed_samples], sizeof(double complex) * block_len);
+
+            // 出力用一時バッファ
+            double complex block_out[NUM_CHANNELS][output_expected_block_size];
+            double block_power[NUM_CHANNELS];
+            memset(block_out, 0, sizeof(double complex) * NUM_CHANNELS * output_expected_block_size);
+            memset(block_power, 0, sizeof(double) * NUM_CHANNELS);
+
+            // チャネライザ処理
+            channelizer_process_block(NUM_CHANNELS, output_expected_block_size, COEF_PER_STAGE, handle->reg,
+                                      handle->split_filter, &handle->fftw, input_block, (double complex *)block_out,
+                                      block_power);
+
+            // 出力ブロックのサイズを決定
+            int output_len = output_expected_block_size;
+            if (output_offset + output_len > total_output) {
+                // 出力の終端が総出力を超える場合は、出力ブロックサイズを調整する
+                output_len = total_output - output_offset;
+            }
+
+            // 出力用一時バッファ（`block_out`）から最終出力バッファ（`channelizer_out`）にコピー
+            for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+                memcpy(&channelizer_out[ch][output_offset], &block_out[ch][0], sizeof(double complex) * output_len);
+            }
+            // 電力も加算
+            for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+                power[ch] += block_power[ch];
+            }
+
+            // 処理済みサンプル数と出力オフセットを更新
+            processed_samples += input_block_size;
+            output_offset += output_len;
+        }
+        // -------------------- ここまでチャネライザ処理の分割実行 --------------------
 
         detected_channel = find_strongest_channel(power, &second_channel, &second_power);
 
         // 最も強いチャネルの出力をFSK/GFSK復調してビット列を回復
-        if (fsk_demodulate_at_rate(channelizer_out[channel], output_expected_len, get_channel_spacing_hz(),
+        if (fsk_demodulate_at_rate(channelizer_out[detected_channel], output_expected_len, get_channel_spacing_hz(),
                                    use_gaussian, output_gauss, output_gauss_len, output_expected_len, rx_bits,
                                    &n_rx_bits) != 0) {
             fprintf(stream, "  [%s] demodulation failed\n", name);
