@@ -15,9 +15,6 @@
 #include "fsk.h"
 #include "usrp.h"
 
-// チャネルの間隔をHz単位で計算して返す
-static double get_channel_spacing_hz(void) { return RX_SAMP_RATE / NUM_CHANNELS; }
-
 // セルフテスト用の周波数を計算して返す
 static double get_self_test_frequency_hz(int sorted_position, int sorted_len) {
     int center = sorted_len / 2;
@@ -25,8 +22,7 @@ static double get_self_test_frequency_hz(int sorted_position, int sorted_len) {
 }
 
 // テスト用の単一トーン信号を生成してcomplex_signalに格納する
-static void fill_tone_block(double complex *complex_signal, int len, double tone_hz) {
-    const double sample_rate_hz = RX_SAMP_RATE;
+static void fill_tone_block(double complex *complex_signal, int len, double tone_hz, double sample_rate_hz) {
     const double amplitude = 0.8;
     const double two_pi = 2 * M_PI;
 
@@ -63,12 +59,13 @@ int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
         double max_power = -1.0;
         double second_power = -1.0;
 
-        fill_tone_block(complex_signal, BUFFER_SIZE, tone_hz);
+        fill_tone_block(complex_signal, BUFFER_SIZE, tone_hz, RX_SAMP_RATE);
         channelizer_reset(handle);
 
         // 最後の1ブロックを評価して初期過渡の影響を減らす
         for (int warmup = 0; warmup < 3; ++warmup) {
-            channelizer_process_block(handle, complex_signal, channelizer_out, power);
+            channelizer_process_block(handle, complex_signal, (double complex *)channelizer_out, power, NUM_CHANNELS,
+                                      TIME_SLOTS, COEF_PER_STAGE);
         }
 
         for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
@@ -380,7 +377,8 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
         channelizer_reset(handle);
 
         // チャネライザ処理の実行
-        channelizer_process_block(handle, mixed_signal, channelizer_out, power);
+        channelizer_process_block(handle, mixed_signal, (double complex *)channelizer_out, power, NUM_CHANNELS,
+                                  output_expected_len, COEF_PER_STAGE);
 
         detected_channel = find_strongest_channel(power, &second_channel, &second_power);
 

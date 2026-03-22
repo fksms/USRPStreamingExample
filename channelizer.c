@@ -26,6 +26,9 @@ extern LockFreeRingBuffer lfrb;
 extern BlockingRingBuffer brb;
 // ------------------------------------------------
 
+// チャネルの間隔をHz単位で計算して返す
+double get_channel_spacing_hz(void) { return RX_SAMP_RATE / NUM_CHANNELS; }
+
 // チャネライザのセットアップ
 int channelizer_setup(channelizer_handle *handle) {
     // 分割されたFIRフィルタ係数へのポインタ
@@ -114,26 +117,27 @@ void channelizer_reset(channelizer_handle *handle) {
 //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
 //
 void channelizer_process_block(channelizer_handle *handle, const double complex *complex_signal,
-                               double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS], double power[NUM_CHANNELS]) {
+                               double complex *channelizer_out, double *power, int num_channels, int time_slots,
+                               int coef_per_stage) {
     // 分割されたFIRフィルタ係数へのポインタ
-    double(*split_filter)[COEF_PER_STAGE] = handle->split_filter;
+    double(*split_filter)[coef_per_stage] = (double(*)[coef_per_stage])handle->split_filter;
 
     // チャネルごとの出力電力を初期化
-    memset(power, 0, sizeof(double) * NUM_CHANNELS);
+    memset(power, 0, sizeof(double) * num_channels);
 
-    for (int nn = 0; nn < TIME_SLOTS; ++nn) {
+    for (int nn = 0; nn < time_slots; ++nn) {
         // 各チャネルのレジスタを更新
-        for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
-            for (int kk = COEF_PER_STAGE - 1; kk > 0; --kk) {
+        for (int ch = 0; ch < num_channels; ++ch) {
+            for (int kk = coef_per_stage - 1; kk > 0; --kk) {
                 handle->reg[ch][kk] = handle->reg[ch][kk - 1];
             }
-            handle->reg[ch][0] = complex_signal[nn * NUM_CHANNELS + ch];
+            handle->reg[ch][0] = complex_signal[nn * num_channels + ch];
         }
 
         // FIR出力をFFT入力へ格納
-        for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+        for (int ch = 0; ch < num_channels; ++ch) {
             double complex filter_output = 0.0;
-            for (int kk = 0; kk < COEF_PER_STAGE; ++kk) {
+            for (int kk = 0; kk < coef_per_stage; ++kk) {
                 filter_output += handle->reg[ch][kk] * split_filter[ch][kk];
             }
             handle->in[ch] = filter_output;
@@ -143,8 +147,8 @@ void channelizer_process_block(channelizer_handle *handle, const double complex 
         fftw_execute(handle->plan);
 
         // チャネルごとに出力を保存し、電力を計算
-        for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
-            channelizer_out[ch][nn] = handle->out[ch];
+        for (int ch = 0; ch < num_channels; ++ch) {
+            ((double complex(*)[time_slots])channelizer_out)[ch][nn] = handle->out[ch];
             double re = creal(handle->out[ch]);
             double im = cimag(handle->out[ch]);
             power[ch] += re * re + im * im;
@@ -210,7 +214,8 @@ void *channelizer_thread(void *arg) {
         }
 
         // チャネライザ処理
-        channelizer_process_block(handle, complex_signal, channelizer_out, power);
+        channelizer_process_block(handle, complex_signal, (double complex *)channelizer_out, power, NUM_CHANNELS,
+                                  TIME_SLOTS, COEF_PER_STAGE);
 
         // -------------------------- CFAR ---------------------------
         // 概要：
