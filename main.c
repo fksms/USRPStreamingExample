@@ -22,11 +22,6 @@
 _Atomic bool running = true;
 // ------------------------------------------------
 
-// --------------------For USRP--------------------
-// Device args (e.g. "type=b200")
-char *device_args = "";
-// ------------------------------------------------
-
 // ---------------------Buffer---------------------
 // USRP -> Channelizer のリングバッファ
 LockFreeRingBuffer lfrb;
@@ -38,7 +33,6 @@ void print_help(void) {
     fprintf(stderr, "XXXXXX\n\n"
 
                     "Options:\n"
-                    "    -d (device args)\n"
                     "    -a (RX antenna)\n"
                     "    -c (RX channel)\n"
                     "    -f (RX frequency in Hz)\n"
@@ -73,11 +67,8 @@ int main(int argc, char *argv[]) {
     // ------------------------------------------------
 
     // Process options
-    while ((option = getopt(argc, argv, "d:a:c:f:g:m:th")) != -1) {
+    while ((option = getopt(argc, argv, "a:c:f:g:m:th")) != -1) {
         switch (option) {
-        case 'd':
-            device_args = strdup(optarg);
-            break;
 
         case 'a':
             rx_antenna = strdup(optarg);

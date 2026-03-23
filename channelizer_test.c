@@ -8,8 +8,6 @@
 #include <string.h>
 #include <time.h>
 
-#include <fftw3.h>
-
 #include "channelizer.h"
 #include "channelizer_test.h"
 #include "fsk.h"
@@ -494,22 +492,4 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
     free(mixed_signal);
     free(channelizer_out);
     return -1;
-}
-
-/* ================================================================
- * IQ データをファイルに保存
- *   フォーマット: float32 interleaved  [I0,Q0, I1,Q1, ...]
- * ================================================================ */
-void write_iq_file(const char *path, const float *iq, int len) {
-    FILE *fp = fopen(path, "w");
-    if (!fp) {
-        perror("fopen");
-        return;
-    }
-    // CSV形式で出力: I,Q\n
-    for (int i = 0; i < len / 2; i++) {
-        fprintf(fp, "%f,%f\n", iq[2 * i], iq[2 * i + 1]);
-    }
-    fclose(fp);
-    printf("[File] %s  (%d samples, %.1f μs)\n", path, len / 2, (double)len / TX_SAMP_RATE / 2 * 1e6);
 }

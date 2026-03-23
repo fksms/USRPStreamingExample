@@ -47,7 +47,3 @@ void fir_design_kaiser_lowpass(double *h, int N, double fc, double beta) {
     }
     free(w);
 }
-
-// 使用例:
-// double h[N];
-// fir_design_kaiser_lowpass(h, N, fc, beta);

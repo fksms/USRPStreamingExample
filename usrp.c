@@ -16,10 +16,6 @@
 extern _Atomic bool running;
 // ------------------------------------------------
 
-// --------------------For USRP--------------------
-extern char *device_args;
-// ------------------------------------------------
-
 // ---------------------Buffer---------------------
 extern LockFreeRingBuffer lfrb;
 // ------------------------------------------------
@@ -27,6 +23,8 @@ extern LockFreeRingBuffer lfrb;
 int usrp_setup(uhd_usrp_handle *usrp) {
     // UHD error codes
     uhd_error error;
+
+    char *device_args = "";
 
     // Create USRP
     error = uhd_usrp_make(usrp, device_args);
@@ -334,9 +332,6 @@ void *usrp_tx_thread(void *arg) {
     for (int i = 2 * n_samples; i < iq_len; i++) {
         iq[i] = 0.0f;
     }
-
-    // IQデータをファイルに保存
-    write_iq_file("fsk_iq.csv", iq, iq_len);
 
     // 送信する信号のバッファ
     static int16_t send_buf[TX_NUM_SAMPS * 2];
