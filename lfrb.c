@@ -12,8 +12,16 @@ void lfrb_init(LockFreeRingBuffer *rb) {
     atomic_store_explicit(&rb->read_pos, 0, memory_order_relaxed);
 }
 
-/* ---------------------------------------------------------------
- * 書き込み — Writerスレッド専用
+/**
+ * @brief 書き込み — Writerスレッド専用
+ *
+ * @param rb    ロックフリーリングバッファへのポインタ
+ * @param src   書き込むデータへのポインタ
+ * @param len   書き込むサンプル数
+ *
+ * @return true 書き込み成功、false バッファ溢れ
+ *
+ * @note
  *
  * [手順]
  *   1. read_pos を acquire ロードして空き容量を確認
@@ -22,7 +30,7 @@ void lfrb_init(LockFreeRingBuffer *rb) {
  *
  * release ストアにより、buf[]への書き込みが
  * write_pos の更新より先に他スレッドから見えることが保証される。
- * ---------------------------------------------------------------*/
+ */
 bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src, int len) {
     int wp = atomic_load_explicit(&rb->write_pos, memory_order_relaxed);
     int rp = atomic_load_explicit(&rb->read_pos, memory_order_acquire);
@@ -45,16 +53,25 @@ bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src, int len) {
     return true;
 }
 
-/* ---------------------------------------------------------------
- * 読み出し — Readerスレッド専用
+/**
+ * @brief 読み出し — Readerスレッド専用
+ *
+ * @param rb            ロックフリーリングバッファへのポインタ
+ * @param dst           読み出すデータを格納するバッファへのポインタ
+ * @param len           読み出すサンプル数
+ * @param next_overlap  次回読み出し時のオーバーラップサンプル数（0以上len未満で指定）
+ *
+ * @return true 読み出し成功、false バッファ空
+ *
+ * @note
  *
  * [手順]
  *   1. write_pos を acquire ロードしてデータ量を確認
  *      → これによりWriterの buf[] 書き込みが可視になることが保証される
  *   2. buf[] からデータをコピー
  *   3. read_pos を release ストア
- * ---------------------------------------------------------------*/
-bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst, int len) {
+ */
+bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst, int len, int next_overlap) {
     int rp = atomic_load_explicit(&rb->read_pos, memory_order_relaxed);
     int wp = atomic_load_explicit(&rb->write_pos, memory_order_acquire);
 
@@ -72,6 +89,6 @@ bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst, int len) {
         memcpy(dst + tail, &rb->buf[0], (len - tail) * sizeof(iq_sample_t));
     }
 
-    atomic_store_explicit(&rb->read_pos, rp + len, memory_order_release);
+    atomic_store_explicit(&rb->read_pos, rp + len - next_overlap, memory_order_release);
     return true;
 }

@@ -215,7 +215,7 @@ void *channelizer_thread(void *arg) {
     static BurstCatcher burst_catcher[NUM_CHANNELS];
 
     while (atomic_load(&running)) {
-        if (!lfrb_read(&lfrb, output_buf, INPUT_SAMPS * 2)) {
+        if (!lfrb_read(&lfrb, output_buf, INPUT_SAMPS * 2, 0)) {
             // バッファ空の場合
             nanosleep(&ts, NULL);
             continue;

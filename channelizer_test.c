@@ -15,7 +15,7 @@
 #include "fsk.h"
 #include "usrp.h"
 
-// セルフテスト用の周波数を計算して返す
+// 単一トーン入力テスト用の周波数を計算して返す
 static double get_self_test_frequency_hz(int sorted_position, int sorted_len) {
     int center = sorted_len / 2;
     return (sorted_position - center) * get_channel_spacing_hz();
@@ -32,11 +32,11 @@ static void fill_tone_block(double complex *complex_signal, int len, double tone
     }
 }
 
-// チャネライザのセルフテストを実行する
+// チャネライザに単一トーン信号を入力するテストを実行する
 //
 // テスト内容：
 //   50チャネルのチャネライザに対して、中心周波数がチャネルの中心に位置する単一トーン信号を入力し、最も強いチャネルが正しいかどうかを評価する
-int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
+int channelizer_run_single_tone_test(channelizer_handle *handle, FILE *stream) {
     static double complex complex_signal[INPUT_SAMPS];
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS];
     int sorted_idx[NUM_CHANNELS];
@@ -45,7 +45,7 @@ int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
 
     get_sorted_channel_indices(NUM_CHANNELS, sorted_idx);
 
-    fprintf(stream, "Channelizer self-test start\n");
+    fprintf(stream, "Channelizer single-tone test start\n");
     fprintf(stream, "  sample_rate = %.0f Hz\n", RX_SAMP_RATE);
     fprintf(stream, "  num_channels = %d\n", NUM_CHANNELS);
     fprintf(stream, "  channel_spacing = %.0f Hz\n", get_channel_spacing_hz());
@@ -93,11 +93,11 @@ int channelizer_run_self_test(channelizer_handle *handle, FILE *stream) {
     }
 
     if (failures == 0) {
-        fprintf(stream, "Channelizer self-test passed (%d/%d)\n", sorted_len, sorted_len);
+        fprintf(stream, "Channelizer single-tone test passed (%d/%d)\n", sorted_len, sorted_len);
         return 0;
     }
 
-    fprintf(stream, "Channelizer self-test failed (%d/%d failed)\n", failures, sorted_len);
+    fprintf(stream, "Channelizer single-tone test failed (%d/%d failed)\n", failures, sorted_len);
     return -1;
 }
 
@@ -262,7 +262,11 @@ static void build_shifted_modulated_block(const double complex *baseband, int n_
     }
 }
 
-// チャネライザのモデムループバックテストを実行する
+// FSK/GFSK変調・復調処理を含むチャネライザのループバックテストを実行する
+//
+// テスト内容：
+//   チャネライザの入力に対して、FSK/GFSK変調された単一チャネルの信号を生成して入力し、チャネライザの出力から最も強いチャネルを見つけ、
+//   そのチャネルの出力をFSK/GFSK復調してビット列を回復する。そして、送信ビット列と復調ビット列を比較してエラー数とビット誤り率を評価する。
 int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel, FILE *stream) {
     // 各SPSを計算
     int tx_sps = get_samples_per_symbol(TX_SAMP_RATE);

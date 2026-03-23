@@ -50,6 +50,7 @@ void print_help(void) {
 
 int main(int argc, char *argv[]) {
     int option = 0;
+
     // ------------------For USRP RX-------------------
     double rx_freq = 924e6;
     double rx_gain = 40.0;
@@ -67,7 +68,7 @@ int main(int argc, char *argv[]) {
 #endif // TX_TEST
 
     // --------------------For Test--------------------
-    bool run_channelizer_self_test = false;
+    bool run_channelizer_single_tone_test = false;
     int run_modem_loopback_channel = -1;
     // ------------------------------------------------
 
@@ -99,7 +100,7 @@ int main(int argc, char *argv[]) {
             break;
 
         case 't':
-            run_channelizer_self_test = true;
+            run_channelizer_single_tone_test = true;
             break;
 
         case 'h':
@@ -117,7 +118,7 @@ int main(int argc, char *argv[]) {
     brb_init(&brb);
 
     // ----------------------------Test----------------------------
-    if (run_channelizer_self_test || run_modem_loopback_channel >= 0) {
+    if (run_channelizer_single_tone_test || run_modem_loopback_channel >= 0) {
         channelizer_handle channelizer;
         if (channelizer_setup(&channelizer)) {
             printf("Setup channelizer failed\n");
@@ -125,8 +126,8 @@ int main(int argc, char *argv[]) {
         }
 
         int rc;
-        if (run_channelizer_self_test) {
-            rc = channelizer_run_self_test(&channelizer, stdout);
+        if (run_channelizer_single_tone_test) {
+            rc = channelizer_run_single_tone_test(&channelizer, stdout);
         } else {
             rc = channelizer_run_modem_loopback_test(&channelizer, run_modem_loopback_channel, stdout);
         }
