@@ -99,12 +99,6 @@ int channelizer_run_single_tone_test(channelizer_handle *handle, FILE *stream) {
     return -1;
 }
 
-// プリアンブルのビット列を生成する関数
-static uint8_t get_preamble_bit(int index) {
-    const uint8_t preamble = 0x55; /* 01010101b */
-    return (preamble >> (7 - index)) & 1;
-}
-
 // ランダムデータ生成
 void generate_bits(uint8_t *bits, int len) {
     static bool seeded = false;
@@ -113,18 +107,8 @@ void generate_bits(uint8_t *bits, int len) {
         seeded = true;
     }
 
-    // プリアンブルを定義
-    if (len < PREAMBLE_LEN) {
-        fprintf(stderr, "配列長がプリアンブルより短いです\n");
-        return;
-    }
-
-    // プリアンブルをビット列に展開
-    for (int i = 0; i < PREAMBLE_LEN; i++)
-        bits[i] = get_preamble_bit(i);
-
     // ランダムビットを生成
-    for (int i = PREAMBLE_LEN; i < len; i++)
+    for (int i = 0; i < len; i++)
         bits[i] = rand() & 1;
 }
 
@@ -281,7 +265,7 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
     }
     // 入力と出力データ用バッファを確保
     uint8_t tx_bits[TEST_BITS_LEN];
-    uint8_t rx_bits[TEST_RECEIVE_LEN];
+    uint8_t rx_bits[TEST_BITS_LEN];
     // テスト用のガウスフィルタ係数の長さを計算
     int input_gauss_len = get_gaussian_filter_length(TX_SAMP_RATE);
     int output_gauss_len = get_gaussian_filter_length(get_channel_spacing_hz());
@@ -355,22 +339,21 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
         }
 
         // -------------------- 変調後の信号をCSVファイルに出力 --------------------
-        char filename[32];
-        snprintf(filename, sizeof(filename), "tx_%s.csv", name);
+        // char filename[32];
+        // snprintf(filename, sizeof(filename), "tx_%s.csv", name);
 
-        FILE *fp = fopen(filename, "w");
-        if (!fp) {
-            fprintf(stream, "Failed to open %s\n", filename);
-            // failures++;
-            continue;
-        }
+        // FILE *fp = fopen(filename, "w");
+        // if (!fp) {
+        //     fprintf(stream, "Failed to open %s\n", filename);
+        //     // failures++;
+        //     continue;
+        // }
 
-        // CSV出力: 実部,虚部
-        for (int i = 0; i < n_tx_samples; ++i) {
-            fprintf(fp, "%lf,%lf\n", creal(tx_baseband[i]), cimag(tx_baseband[i]));
-        }
+        // for (int i = 0; i < n_tx_samples; ++i) {
+        //     fprintf(fp, "%lf,%lf\n", creal(tx_baseband[i]), cimag(tx_baseband[i]));
+        // }
 
-        fclose(fp);
+        // fclose(fp);
         // --------------------------------------------------------------------
 
         // 送信サンプル列を受信側のサンプルレートへアップサンプリング
@@ -462,27 +445,26 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
         detected_channel = find_strongest_channel(power, &second_channel, &second_power);
 
         // --------------- チャネライザ通過後の信号をCSVファイルに出力 ---------------
-        snprintf(filename, sizeof(filename), "rx_%s.csv", name);
+        // snprintf(filename, sizeof(filename), "rx_%s.csv", name);
 
-        FILE *fp2 = fopen(filename, "w");
-        if (!fp2) {
-            fprintf(stream, "Failed to open %s\n", filename);
-            // failures++;
-            continue;
-        }
+        // FILE *fp2 = fopen(filename, "w");
+        // if (!fp2) {
+        //     fprintf(stream, "Failed to open %s\n", filename);
+        //     // failures++;
+        //     continue;
+        // }
 
-        // CSV出力: 実部,虚部
-        for (int i = 0; i < output_expected_len; ++i) {
-            fprintf(fp2, "%lf,%lf\n", creal(channelizer_out[detected_channel][i]),
-                    cimag(channelizer_out[detected_channel][i]));
-        }
+        // for (int i = 0; i < output_expected_len; ++i) {
+        //     fprintf(fp2, "%lf,%lf\n", creal(channelizer_out[detected_channel][i]),
+        //             cimag(channelizer_out[detected_channel][i]));
+        // }
 
-        fclose(fp2);
+        // fclose(fp2);
         // --------------------------------------------------------------------
 
         // 最も強いチャネルの出力をFSK/GFSK復調してビット列を回復
         if (fsk_demodulate_at_rate(channelizer_out[detected_channel], output_expected_len, get_channel_spacing_hz(),
-                                   use_gaussian, output_gauss, output_gauss_len, TEST_RECEIVE_LEN, rx_bits,
+                                   use_gaussian, output_gauss, output_gauss_len, TEST_BITS_LEN, rx_bits,
                                    &n_rx_bits) != 0) {
             fprintf(stream, "  [%s] demodulation failed\n", name);
             failures++;

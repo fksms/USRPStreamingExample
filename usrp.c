@@ -389,9 +389,6 @@ void *usrp_tx_thread(void *arg) {
             // continue;
         }
 
-        // 1秒スリープ
-        usleep(1000000);
-
         // center_freqを200kHz上げる
         usrp_tx->tx_freq += 200e3;
 
@@ -411,6 +408,9 @@ void *usrp_tx_thread(void *arg) {
         }
 
         printf("TX freq changed: %f Hz\n", usrp_tx->tx_freq);
+
+        // 1秒スリープ
+        usleep(1000000);
     }
 
     // Stop
