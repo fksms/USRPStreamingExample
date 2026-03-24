@@ -212,7 +212,7 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
     }
 
     // Create TX metadata
-    error = uhd_tx_metadata_make(&usrp_tx->tx_metadata, false, 0, 0.1, true, false);
+    error = uhd_tx_metadata_make(&usrp_tx->tx_metadata, false, 0, 0.1, false, false);
     if (error) {
         printf("%u\n", error);
         return error;
@@ -297,9 +297,16 @@ void *usrp_tx_thread(void *arg) {
     double timeout = 3.0; //[sec]
 
     // 送信するビット列
-    int n_bits = 800;
+    int n_bits = 1600;
     uint8_t bits[n_bits];
     generate_bits(bits, n_bits);
+
+    // 生成したビット列を表示
+    printf("Generated bits (%d bits): ", n_bits);
+    for (int i = 0; i < n_bits; ++i) {
+        printf("%d", bits[i]);
+    }
+    printf("\n");
 
     // ガウスフィルタ係数の構築
     int sps = get_samples_per_symbol(TX_SAMP_RATE);
@@ -318,28 +325,33 @@ void *usrp_tx_thread(void *arg) {
         exit(EXIT_FAILURE);
     }
 
-    // `iq_len_raw`が`TX_NUM_SAMPS`の倍数になるように切り上げ
+    printf("Modulated %d bits into %d samples\n", n_bits, n_samples);
+    printf("\n");
+
+    // `iq_len_raw_x2`が`TX_NUM_SAMPS`の倍数になるように切り上げ
     int iq_block = 2 * TX_NUM_SAMPS;
-    int iq_len = ((iq_len_raw * 2 + iq_block - 1) / iq_block) * iq_block; // 切り上げ
+    int iq_len = ((iq_len_raw * 2 * 2 + iq_block - 1) / iq_block) * iq_block; // 切り上げ
 
     // 信号格納用
     float iq[iq_len];
-    for (int n = 0; n < n_samples; ++n) {
-        iq[2 * n] = (float)creal(iq_raw[n]);
-        iq[2 * n + 1] = (float)cimag(iq_raw[n]);
-    }
-    // iq_lenの長さがn_samplesより長い場合は残りを0で埋める
-    for (int i = 2 * n_samples; i < iq_len; i++) {
-        iq[i] = 0.0f;
+    memset(iq, 0, sizeof(float) * iq_len);
+    // 最初は0埋めしたデータを送信し、その後に変調された信号を送信する
+    for (int i = 0; i < n_samples; ++i) {
+        iq[2 * i + iq_len_raw] = (float)creal(iq_raw[i]);
+        iq[2 * i + 1 + iq_len_raw] = (float)cimag(iq_raw[i]);
     }
 
     // 送信する信号のバッファ
-    static int16_t send_buf[TX_NUM_SAMPS * 2];
+    int16_t send_buf[iq_len];
 
     // 送信する信号を生成（例：I成分が1、Q成分が1の単純な信号）
-    // for (size_t i = 0; i < TX_NUM_SAMPS; ++i) {
-    //     send_buf[2 * i] = INT16_MAX; // I成分
-    //     send_buf[2 * i + 1] = 0;     // Q成分
+    // for (int i = 0; i < iq_len / 4; ++i) {
+    //     send_buf[2 * i] = 0;     // I成分
+    //     send_buf[2 * i + 1] = 0; // Q成分
+    // }
+    // for (int i = iq_len / 4; i < iq_len; ++i) {
+    //     send_buf[2 * i] = INT16_MAX;     // I成分
+    //     send_buf[2 * i + 1] = INT16_MAX; // Q成分
     // }
 
     // float配列iqをint16_t配列に変換
@@ -353,17 +365,28 @@ void *usrp_tx_thread(void *arg) {
         send_buf[i] = (int16_t)(val * INT16_MAX);
     }
 
-    // UHD は void* の配列を受け取る
-    const void *buf_ptrs[1] = {send_buf};
-
     // 送信ループの回数を計算
     int loop = (int)(iq_len / 2 / TX_NUM_SAMPS);
 
     while (atomic_load(&running)) {
         for (int i = 0; i < loop; ++i) {
+            // ブロックごとにポインタをオフセットして送信バッファを指定
+            const void *buf_ptrs[1] = {send_buf + i * TX_NUM_SAMPS * 2};
             // ストリームを送信
             uhd_tx_streamer_send(usrp_tx->tx_streamer, buf_ptrs, TX_NUM_SAMPS, &usrp_tx->tx_metadata, timeout,
                                  &actual_num_samps);
+        }
+
+        // 送信サンプル数が想定と異なる場合
+        if (actual_num_samps != TX_NUM_SAMPS) {
+            // エラー有りの場合は解放して終了
+            printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
+            break;
+
+            // エラー有りの場合はContinueする
+            // printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
+            // memset(recv_buf + actual_num_samps * 2, 0, (TX_NUM_SAMPS - actual_num_samps) * sizeof(iq_sample_t) * 2);
+            // continue;
         }
 
         // 1秒スリープ

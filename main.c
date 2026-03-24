@@ -16,7 +16,7 @@
 #include "usrp.h"
 
 // 送信テスト時は以下をコメントアウト
-// #define TX_TEST
+#define TX_TEST
 
 // ---------------------Status---------------------
 _Atomic bool running = true;
@@ -47,15 +47,15 @@ int main(int argc, char *argv[]) {
 
     // ------------------For USRP RX-------------------
     double rx_freq = 924e6;
-    double rx_gain = 40.0;
-    size_t rx_channel = 1;
+    double rx_gain = 30.0;
+    size_t rx_channel = 0;
     char *rx_antenna = "RX2";
     // ------------------------------------------------
 
 #ifdef TX_TEST
     // ------------------For USRP TX-------------------
-    double tx_freq = 920e6;
-    double tx_gain = 10.0;
+    double tx_freq = 922e6;
+    double tx_gain = 15.0;
     size_t tx_channel = 1;
     char *tx_antenna = "TX/RX";
     // ------------------------------------------------

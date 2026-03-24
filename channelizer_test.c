@@ -126,15 +126,6 @@ void generate_bits(uint8_t *bits, int len) {
     // ランダムビットを生成
     for (int i = PREAMBLE_LEN; i < len; i++)
         bits[i] = rand() & 1;
-
-    /* 表示 */
-    printf("入力データ: \n");
-    for (int i = 0; i < len; i++) {
-        printf("%u", bits[i]);
-        if ((i + 1) % 8 == 0)
-            printf(" ");
-    }
-    printf("\n");
 }
 
 // チャネル番号から中心周波数をHz単位で計算して返す
@@ -345,7 +336,7 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
 
     for (int mode = 0; mode < 2; ++mode) {
         bool use_gaussian = (mode == 1);
-        const char *name = use_gaussian ? "GFSK" : "FSK";
+        const char *name = use_gaussian ? "GFSK" : "2FSK";
         int n_tx_samples = 0;
         int n_resampled_samples = 0;
         int n_rx_bits = 0;
@@ -362,6 +353,25 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
             failures++;
             continue;
         }
+
+        // -------------------- 変調後の信号をCSVファイルに出力 --------------------
+        char filename[32];
+        snprintf(filename, sizeof(filename), "tx_%s.csv", name);
+
+        FILE *fp = fopen(filename, "w");
+        if (!fp) {
+            fprintf(stream, "Failed to open %s\n", filename);
+            // failures++;
+            continue;
+        }
+
+        // CSV出力: 実部,虚部
+        for (int i = 0; i < n_tx_samples; ++i) {
+            fprintf(fp, "%lf,%lf\n", creal(tx_baseband[i]), cimag(tx_baseband[i]));
+        }
+
+        fclose(fp);
+        // --------------------------------------------------------------------
 
         // 送信サンプル列を受信側のサンプルレートへアップサンプリング
         n_resampled_samples = resample_complex_linear(tx_baseband, n_tx_samples, TX_SAMP_RATE, RX_SAMP_RATE,
@@ -450,6 +460,25 @@ int channelizer_run_modem_loopback_test(channelizer_handle *handle, int channel,
 
         // チャネライザの出力から最も強いチャネルを見つける
         detected_channel = find_strongest_channel(power, &second_channel, &second_power);
+
+        // --------------- チャネライザ通過後の信号をCSVファイルに出力 ---------------
+        snprintf(filename, sizeof(filename), "rx_%s.csv", name);
+
+        FILE *fp2 = fopen(filename, "w");
+        if (!fp2) {
+            fprintf(stream, "Failed to open %s\n", filename);
+            // failures++;
+            continue;
+        }
+
+        // CSV出力: 実部,虚部
+        for (int i = 0; i < output_expected_len; ++i) {
+            fprintf(fp2, "%lf,%lf\n", creal(channelizer_out[detected_channel][i]),
+                    cimag(channelizer_out[detected_channel][i]));
+        }
+
+        fclose(fp2);
+        // --------------------------------------------------------------------
 
         // 最も強いチャネルの出力をFSK/GFSK復調してビット列を回復
         if (fsk_demodulate_at_rate(channelizer_out[detected_channel], output_expected_len, get_channel_spacing_hz(),

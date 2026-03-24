@@ -44,6 +44,25 @@ void *reader_thread(void *arg) {
         if (brb_read(&brb, &data, &length)) {
             printf("Reader: Received burst of length %d samples\n", length);
 
+            // ファイル名生成
+            char filename[32];
+            snprintf(filename, sizeof(filename), "output_%d.csv", burst_count + 1);
+
+            FILE *fp = fopen(filename, "w");
+            if (!fp) {
+                perror("Failed to open output_X.csv");
+                free(data);
+                atomic_store(&running, false);
+                return NULL;
+            }
+
+            // CSV出力: 実部,虚部
+            for (int i = 0; i < length; ++i) {
+                fprintf(fp, "%lf,%lf\n", creal(data[i]), cimag(data[i]));
+            }
+
+            fclose(fp);
+
             // 受け取ったデータの長さから復調可能なビット数を計算
             int rx_bits_capacity = length / sps;
 
