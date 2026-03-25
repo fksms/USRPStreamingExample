@@ -181,7 +181,7 @@ void *channelizer_thread(void *arg) {
     struct timespec ts = {sec, nsec};
 
     // リングバッファから読み取った信号を格納するためのバッファ
-    static iq_sample_t output_buf[INPUT_SAMPS * 2];
+    static int16_t output_buf[INPUT_SAMPS * 2];
 
     // 複素信号を格納するためのバッファ
     static double complex complex_signal[INPUT_SAMPS];

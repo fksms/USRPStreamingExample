@@ -20,10 +20,10 @@
 // バッファ要素：mallocした配列ポインタと長さ
 typedef struct {
     double complex *ptr; // mallocされた配列のポインタ
-    int length;          // 配列の要素数
+    int len;             // mallocされた配列の要素数
 } BrbElem;
 
-// ブロッキングリングバッファ構造体
+// BlockingRingBuffer構造体
 typedef struct {
     BrbElem buf[BUF_ELEM_2];
     int write_pos;
@@ -33,11 +33,9 @@ typedef struct {
     pthread_cond_t not_full;
 } BlockingRingBuffer;
 
-void brb_init(BlockingRingBuffer *rb);
-// 書き込み：mallocした配列ポインタと長さを格納
-bool brb_write(BlockingRingBuffer *rb, double complex *src, int length);
-// 読み出し：配列ポインタと長さを取得（読み出し側でfreeする）
-bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *length);
-void brb_destroy(BlockingRingBuffer *rb);
+bool brb_init(BlockingRingBuffer *rb);
+bool brb_write(BlockingRingBuffer *rb, double complex *src, int len);
+bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *len);
+bool brb_destroy(BlockingRingBuffer *rb);
 
 #endif // __BRB_H__

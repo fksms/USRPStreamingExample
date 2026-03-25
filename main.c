@@ -16,7 +16,7 @@
 #include "usrp.h"
 
 // 送信テスト時は以下をコメントアウト
-#define TX_TEST
+// #define TX_TEST
 
 // ---------------------Status---------------------
 _Atomic bool running = true;
@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     // ------------------For USRP RX-------------------
     double rx_freq = 924e6;
     double rx_gain = 30.0;
-    size_t rx_channel = 0;
+    size_t rx_channel = 1;
     char *rx_antenna = "RX2";
     // ------------------------------------------------
 
@@ -104,10 +104,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Init the ring buffer
-    lfrb_init(&lfrb);
-    brb_init(&brb);
-
     // ----------------------------Test----------------------------
     if (run_channelizer_single_tone_test || run_modem_loopback_channel >= 0) {
         channelizer_handle channelizer;
@@ -126,6 +122,13 @@ int main(int argc, char *argv[]) {
         return (rc == 0) ? 0 : -1;
     }
     // ------------------------------------------------------------
+
+    // Init the ring buffer
+    lfrb_init(&lfrb);
+    if (!brb_init(&brb)) {
+        printf("Init Blocking Ring Buffer failed\n");
+        return -1;
+    }
 
     // ----------------------------Setup---------------------------
     // USRP handle
@@ -302,7 +305,10 @@ int main(int argc, char *argv[]) {
     // ------------------------------------------------------------
 
     // Destroy the ring buffer
-    brb_destroy(&brb);
+    if (!brb_destroy(&brb)) {
+        printf("Destroy Blocking Ring Buffer failed\n");
+        return -1;
+    }
 
     return 0;
 }

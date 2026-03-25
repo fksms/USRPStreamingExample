@@ -4,9 +4,13 @@
 
 #include "lfrb.h"
 
-/* ---------------------------------------------------------------
- * 初期化
- * ---------------------------------------------------------------*/
+/**
+ * @brief LockFreeRingBufferの初期化
+ *
+ * @param rb 初期化対象のLockFreeRingBufferへのポインタ
+ *
+ * @return なし（void）
+ */
 void lfrb_init(LockFreeRingBuffer *rb) {
     atomic_store_explicit(&rb->write_pos, 0, memory_order_relaxed);
     atomic_store_explicit(&rb->read_pos, 0, memory_order_relaxed);
@@ -15,7 +19,7 @@ void lfrb_init(LockFreeRingBuffer *rb) {
 /**
  * @brief 書き込み — Writerスレッド専用
  *
- * @param rb    ロックフリーリングバッファへのポインタ
+ * @param rb    LockFreeRingBufferへのポインタ
  * @param src   書き込むデータへのポインタ
  * @param len   書き込むサンプル数
  *
@@ -31,7 +35,7 @@ void lfrb_init(LockFreeRingBuffer *rb) {
  * release ストアにより、buf[]への書き込みが
  * write_pos の更新より先に他スレッドから見えることが保証される。
  */
-bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src, int len) {
+bool lfrb_write(LockFreeRingBuffer *rb, const int16_t *src, int len) {
     int wp = atomic_load_explicit(&rb->write_pos, memory_order_relaxed);
     int rp = atomic_load_explicit(&rb->read_pos, memory_order_acquire);
 
@@ -43,10 +47,10 @@ bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src, int len) {
     int tail = BUF_ELEM - wi;
 
     if (tail >= len) {
-        memcpy(&rb->buf[wi], src, len * sizeof(iq_sample_t));
+        memcpy(&rb->buf[wi], src, len * sizeof(int16_t));
     } else {
-        memcpy(&rb->buf[wi], src, tail * sizeof(iq_sample_t));
-        memcpy(&rb->buf[0], src + tail, (len - tail) * sizeof(iq_sample_t));
+        memcpy(&rb->buf[wi], src, tail * sizeof(int16_t));
+        memcpy(&rb->buf[0], src + tail, (len - tail) * sizeof(int16_t));
     }
 
     atomic_store_explicit(&rb->write_pos, wp + len, memory_order_release);
@@ -56,7 +60,7 @@ bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src, int len) {
 /**
  * @brief 読み出し — Readerスレッド専用
  *
- * @param rb            ロックフリーリングバッファへのポインタ
+ * @param rb            LockFreeRingBufferへのポインタ
  * @param dst           読み出すデータを格納するバッファへのポインタ
  * @param len           読み出すサンプル数
  * @param next_overlap  次回読み出し時のオーバーラップサンプル数（0以上len未満で指定）
@@ -71,7 +75,7 @@ bool lfrb_write(LockFreeRingBuffer *rb, const iq_sample_t *src, int len) {
  *   2. buf[] からデータをコピー
  *   3. read_pos を release ストア
  */
-bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst, int len, int next_overlap) {
+bool lfrb_read(LockFreeRingBuffer *rb, int16_t *dst, int len, int next_overlap) {
     int rp = atomic_load_explicit(&rb->read_pos, memory_order_relaxed);
     int wp = atomic_load_explicit(&rb->write_pos, memory_order_acquire);
 
@@ -83,10 +87,10 @@ bool lfrb_read(LockFreeRingBuffer *rb, iq_sample_t *dst, int len, int next_overl
     int tail = BUF_ELEM - ri;
 
     if (tail >= len) {
-        memcpy(dst, &rb->buf[ri], len * sizeof(iq_sample_t));
+        memcpy(dst, &rb->buf[ri], len * sizeof(int16_t));
     } else {
-        memcpy(dst, &rb->buf[ri], tail * sizeof(iq_sample_t));
-        memcpy(dst + tail, &rb->buf[0], (len - tail) * sizeof(iq_sample_t));
+        memcpy(dst, &rb->buf[ri], tail * sizeof(int16_t));
+        memcpy(dst + tail, &rb->buf[0], (len - tail) * sizeof(int16_t));
     }
 
     atomic_store_explicit(&rb->read_pos, rp + len - next_overlap, memory_order_release);

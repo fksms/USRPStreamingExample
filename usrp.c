@@ -239,7 +239,7 @@ void *usrp_rx_thread(void *arg) {
     double timeout = 3.0; //[sec]
 
     // ストリーミングデータを格納するためのバッファ
-    static iq_sample_t recv_buf[RX_NUM_SAMPS * 2];
+    static int16_t recv_buf[RX_NUM_SAMPS * 2];
 
     // UHD は void* の配列を受け取る
     void *buf_ptrs[1] = {recv_buf};
@@ -265,7 +265,7 @@ void *usrp_rx_thread(void *arg) {
 
             // エラー有りの場合はContinueする
             // printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
-            // memset(recv_buf + actual_num_samps * 2, 0, (RX_NUM_SAMPS - actual_num_samps) * sizeof(iq_sample_t) * 2);
+            // memset(recv_buf + actual_num_samps * 2, 0, (RX_NUM_SAMPS - actual_num_samps) * sizeof(int16_t) * 2);
             // continue;
         }
 
@@ -385,7 +385,7 @@ void *usrp_tx_thread(void *arg) {
 
             // エラー有りの場合はContinueする
             // printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
-            // memset(recv_buf + actual_num_samps * 2, 0, (TX_NUM_SAMPS - actual_num_samps) * sizeof(iq_sample_t) * 2);
+            // memset(recv_buf + actual_num_samps * 2, 0, (TX_NUM_SAMPS - actual_num_samps) * sizeof(int16_t) * 2);
             // continue;
         }
 
