@@ -29,7 +29,32 @@ extern BlockingRingBuffer brb;
 // チャネルの間隔をHz単位で計算して返す
 double get_channel_spacing_hz(void) { return RX_SAMP_RATE / NUM_CHANNELS; }
 
-// チャネライザのセットアップ
+// `NUM_CHANNELS`が偶数（2N）の場合、Nチャネル目が折り返し点となり、
+// 両端が重複するため、実際に使用できるチャネル数を返す
+int get_valid_sorted_channel_count(void) { return (NUM_CHANNELS % 2 == 0) ? (NUM_CHANNELS - 1) : NUM_CHANNELS; }
+
+// Polyphase Channelizer出力のチャネル順並び替え関数
+// （channelizer_out の周波数配置は下記のコメントのようになっているので、周波数順に並び替えるための機能を定義）
+void get_sorted_channel_indices(int num_channels, int *sorted_idx) {
+    int N = num_channels / 2;
+    int idx = 0;
+
+    for (int i = N + 1; i < num_channels; ++i)
+        sorted_idx[idx++] = i;
+    for (int i = 0; i < N + 1; ++i)
+        sorted_idx[idx++] = i;
+}
+
+// BurstCatcherの初期化関数
+void init_burst_catchers(BurstCatcher *catchers, int num_channels) {
+    for (int ch = 0; ch < num_channels; ++ch) {
+        catchers[ch].len = 0;
+        catchers[ch].active = false;
+        memset(catchers[ch].buf, 0, sizeof(catchers[ch].buf));
+    }
+}
+
+// Channelizerのセットアップ
 int channelizer_setup(channelizer_handle *handle) {
     // 分割されたFIRフィルタ係数へのポインタ
     double(*split_filter)[COEF_PER_STAGE] = handle->split_filter;
@@ -55,7 +80,7 @@ int channelizer_setup(channelizer_handle *handle) {
     return 0;
 }
 
-// チャネライザで使用するレジスタの初期化
+// Channelizerで使用するレジスタの初期化
 void channelizer_reset(channelizer_handle *handle) {
     memset(handle->reg, 0, sizeof(handle->reg));
     memset(handle->fftw.in, 0, sizeof(handle->fftw.in));
@@ -63,7 +88,7 @@ void channelizer_reset(channelizer_handle *handle) {
 }
 
 /**
- * @brief ポリフェーズチャネライザの1ブロック処理を行う
+ * @brief Polyphase Channelizerの1ブロック処理を行う
  *
  * @param num_channels      分解するチャンネル数
  * @param time_slots        1チャネルあたりの時間スロット数
@@ -169,7 +194,7 @@ void channelizer_process_block(int num_channels, int time_slots, int coef_per_st
     //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
 }
 
-// チャネライザのスレッド関数
+// Channelizerのスレッド関数
 void *channelizer_thread(void *arg) {
     // Channelizer handle
     channelizer_handle *handle = arg;
@@ -186,10 +211,10 @@ void *channelizer_thread(void *arg) {
     // 複素信号を格納するためのバッファ
     static double complex complex_signal[INPUT_SAMPS];
 
-    // チャネライザ出力用バッファ
+    // Channelizer出力用バッファ
     static double complex channelizer_out[NUM_CHANNELS][TIME_SLOTS] = {0};
 
-    // 1つ前のチャネライザ出力を保存するバッファ
+    // 1つ前のChannelizer出力を保存するバッファ
     static double complex prev_channelizer_out[NUM_CHANNELS][TIME_SLOTS] = {0};
 
     // 各チャンネルの信号の電力を格納するバッファ
@@ -197,7 +222,7 @@ void *channelizer_thread(void *arg) {
 
     // チャネル順並び替え用配列
     // （channelizer_out
-    // の周波数配置は以下のコメントのようになっているので、周波数順に並び替えるためのインデックス配列を定義）
+    // の周波数配置は上記のコメントのようになっているので、周波数順に並び替えるためのインデックス配列を定義）
     int sorted_idx[NUM_CHANNELS];
     get_sorted_channel_indices(NUM_CHANNELS, sorted_idx);
 
@@ -213,6 +238,7 @@ void *channelizer_thread(void *arg) {
 
     // 各チャネルのBurstCatcher用配列
     static BurstCatcher burst_catcher[NUM_CHANNELS];
+    init_burst_catchers(burst_catcher, NUM_CHANNELS);
 
     while (atomic_load(&running)) {
         if (!lfrb_read(&lfrb, output_buf, INPUT_SAMPS * 2, 0)) {
@@ -226,7 +252,7 @@ void *channelizer_thread(void *arg) {
             complex_signal[j] = output_buf[2 * j] + output_buf[2 * j + 1] * I;
         }
 
-        // チャネライザ処理
+        // Channelizer処理
         channelizer_process_block(NUM_CHANNELS, TIME_SLOTS, COEF_PER_STAGE, handle->reg, handle->split_filter,
                                   &handle->fftw, complex_signal, (double complex *)channelizer_out, power);
 
@@ -290,12 +316,6 @@ void *channelizer_thread(void *arg) {
             double train_mean = (train_count > 0) ? (train_sum / train_count) : 0.0;
             // CFAR判定
             cfar_result[CUT] = (power[CUT] > CFAR_ALPHA * train_mean);
-
-            // テスト出力
-            // if (cfar_result[CUT]) {
-            //     // CUTが検出された場合の処理（例：ログ出力）
-            //     printf("CFAR Detection: Channel %d\n", CUT);
-            // }
         }
 
         // ---------------------- Burst Catcher ----------------------
@@ -310,7 +330,8 @@ void *channelizer_thread(void *arg) {
         // activeフラグでバースト中かどうかを判定。
         // バースト終了時には、バッファ内容を処理（flush_burst等）し、lenとactiveをリセットする。
         // -----------------------------------------------------------
-        for (int ch = 0; ch < NUM_CHANNELS; ++ch) {
+        for (int idx = 0; idx < sorted_len; ++idx) {
+            int ch = sorted_idx[idx];
             // バッファへのポインタ
             BurstCatcher *catcher = &burst_catcher[ch];
 
@@ -359,7 +380,7 @@ void *channelizer_thread(void *arg) {
             // false→false: 何もしない
         }
 
-        // 1つ前のCFAR結果とチャネライザ出力を保存
+        // 1つ前のCFAR結果とChannelizer出力を保存
         memcpy(prev_cfar_result, cfar_result, sizeof(cfar_result));
         memcpy(prev_channelizer_out, channelizer_out, sizeof(channelizer_out));
     }
@@ -370,26 +391,10 @@ void *channelizer_thread(void *arg) {
     return NULL;
 }
 
-// チャネライザのクリーンアップ
+// Channelizerのクリーンアップ
 int channelizer_close(channelizer_handle *handle) {
     // FFTWプランの破棄
     fftw_destroy_plan(handle->fftw.plan);
 
     return 0;
-}
-
-// `NUM_CHANNELS`が偶数（2N）の場合、Nチャネル目が折り返し点となり、
-// 両端が重複するため、実際に使用できるチャネル数を返す
-int get_valid_sorted_channel_count(void) { return (NUM_CHANNELS % 2 == 0) ? (NUM_CHANNELS - 1) : NUM_CHANNELS; }
-
-// Polyphase Channelizer出力のチャネル順並び替え関数
-// （channelizer_out の周波数配置は上記のコメントのようになっているので、周波数順に並び替えるための機能を定義）
-void get_sorted_channel_indices(int num_channels, int *sorted_idx) {
-    int N = num_channels / 2;
-    int idx = 0;
-
-    for (int i = N + 1; i < num_channels; ++i)
-        sorted_idx[idx++] = i;
-    for (int i = 0; i < N + 1; ++i)
-        sorted_idx[idx++] = i;
 }
