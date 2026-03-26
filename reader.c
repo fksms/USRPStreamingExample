@@ -39,52 +39,40 @@ void *reader_thread(void *arg) {
 
     while (atomic_load(&running) && burst_count < 20) {
         double complex *data = NULL;
-        int length = 0;
+        int rows = 0;
+        int cols = 0;
 
-        if (brb_read(&brb, &data, &length)) {
-            printf("Reader: Received burst of length %d samples\n", length);
+        if (brb_read(&brb, &data, &rows, &cols)) {
+            printf("Reader: Received burst of length %d samples\n", cols);
 
-            // ファイル名生成
-            char filename[32];
-            snprintf(filename, sizeof(filename), "output_%d.csv", burst_count + 1);
+            for (int i = 0; i < rows; ++i) {
 
-            FILE *fp = fopen(filename, "w");
-            if (!fp) {
-                perror("Failed to open output_X.csv");
-                free(data);
-                atomic_store(&running, false);
-                return NULL;
+                // 受け取ったデータの長さから復調可能なビット数を計算
+                int rx_bits_capacity = cols / sps;
+
+                // 復調ビット列格納用バッファ
+                uint8_t rx_bits[rx_bits_capacity];
+
+                // 復調されたビット数
+                int n_rx_bits = 0;
+
+                // 1行分のチャネル出力を取得
+                double complex *row_data = &data[i * cols];
+
+                // チャネライザの出力をFSK/GFSK復調してビット列を回復
+                if (fsk_demodulate_at_rate(row_data, cols, get_channel_spacing_hz(), true, gauss_coef, gauss_len,
+                                           rx_bits_capacity, rx_bits, &n_rx_bits) != 0) {
+                    printf("demodulation failed\n");
+                    continue;
+                }
+
+                // 復調したビット列を表示
+                printf("Demodulated bits (%d bits): ", n_rx_bits);
+                for (int j = 0; j < n_rx_bits; ++j) {
+                    printf("%d", rx_bits[j]);
+                }
+                printf("\n");
             }
-
-            // CSV出力: 実部,虚部
-            for (int i = 0; i < length; ++i) {
-                fprintf(fp, "%lf,%lf\n", creal(data[i]), cimag(data[i]));
-            }
-
-            fclose(fp);
-
-            // 受け取ったデータの長さから復調可能なビット数を計算
-            int rx_bits_capacity = length / sps;
-
-            // 復調ビット列格納用バッファ
-            uint8_t rx_bits[rx_bits_capacity];
-
-            // 復調されたビット数
-            int n_rx_bits = 0;
-
-            // チャネライザの出力をFSK/GFSK復調してビット列を回復
-            if (fsk_demodulate_at_rate(data, length, get_channel_spacing_hz(), true, gauss_coef, gauss_len,
-                                       rx_bits_capacity, rx_bits, &n_rx_bits) != 0) {
-                printf("demodulation failed\n");
-                continue;
-            }
-
-            // 復調したビット列を表示
-            printf("Demodulated bits (%d bits): ", n_rx_bits);
-            for (int i = 0; i < n_rx_bits; ++i) {
-                printf("%d", rx_bits[i]);
-            }
-            printf("\n");
 
             free(data);
             burst_count++;

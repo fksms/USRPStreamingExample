@@ -322,10 +322,12 @@ void *channelizer_thread(void *arg) {
         // 概要：
         // Burst Catcherは、CFAR判定結果に基づき、バースト信号（連続した検出区間）の開始・継続・終了を管理する。
         // 具体的には、各チャネルごとに以下の状態遷移でバースト信号をバッファに蓄積する：
+        //
         //   - false→true: バースト開始。前フレームと現フレームをバッファに積む
         //   - true→true: バースト継続。現フレームをバッファに追記
         //   - true→false: バースト終了。現フレームまで追記し、バッファを確定（flush等）
         //   - false→false: 何もしない
+        //
         // バッファには最大MAX_FRAMESまでフレームを蓄積し、lenで現在の蓄積数を管理。
         // activeフラグでバースト中かどうかを判定。
         // バースト終了時には、バッファ内容を処理（flush_burst等）し、lenとactiveをリセットする。
@@ -360,24 +362,79 @@ void *channelizer_thread(void *arg) {
                     memcpy(&catcher->buf[catcher->len], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
                     catcher->len += TIME_SLOTS;
                 }
-                // 可変長配列を作成し、catcher->bufからコピー
-                double complex *burst = malloc(sizeof(double complex) * catcher->len);
-                if (burst) {
-                    memcpy(burst, catcher->buf, sizeof(double complex) * catcher->len);
-                    printf("Burst Catcher: Channel %d\n", ch);
-                    // 配列のポインタと長さをリングバッファに書き込む
-                    // （リーダー側でメモリ解放を忘れないこと！！）
-                    brb_write(&brb, burst, catcher->len);
+                catcher->active = false;
+            }
+            // false→false: 何もしない
+        }
+
+        // ---------------------- Burst Grouping ---------------------
+        // 概要：
+        // CFAR判定で検出されたバースト信号をBurst Catcherで管理し、
+        // バーストが確定したチャネルを周波数順にグループ化して、リングバッファ（brb）に送信する。
+        // 具体的には、以下の手順で処理を行う：
+        //
+        //   1. CFAR判定で検出されたチャネルを周波数順に並び替えた配列(sorted_idx)を用いて、
+        //      バーストが確定しているチャネルを検索する。
+        //   2. バーストが確定しているチャネルが見つかったら、そのチャネルと同じ長さのバーストが
+        //      連続しているチャネルを右隣に探索し、同じ長さのバーストが連続しているチャネルをグループ化する。
+        //   3. グループ化したチャネル分のバースト信号をBurst Catcherからまとめてコピーし、
+        //      可変長配列を作成してリングバッファ（brb）に送信する。
+        //   4. 送信したチャネルのBurst Catcherのlenとactiveをリセットする。
+        //   5. グループ化したチャネル分、idxを進めて次のチャネルを検索する。
+        //
+        // ※バーストが確定しているチャネルが見つからない場合は、idxを1つ進めて次のチャネルを検索する。
+        // -----------------------------------------------------------
+        int idx = 0;
+        while (idx < sorted_len) {
+            int ch = sorted_idx[idx];
+            // バッファへのポインタ
+            BurstCatcher *catcher = &burst_catcher[ch];
+            // バースト蓄積が完了しているチャネルを検索
+            if (catcher->len > 0 && catcher->active == false) {
+                int group_len = catcher->len;
+                int group_start = idx;
+                int group_end = idx;
+                // 右隣をチェック
+                for (int j = idx + 1; j < sorted_len; ++j) {
+                    int ch_next = sorted_idx[j];
+                    BurstCatcher *next = &burst_catcher[ch_next];
+                    // 同じ長さのバーストが連続しているチャネルをグループ化
+                    if (next->len == group_len && next->active == false) {
+                        group_end = j;
+                    } else {
+                        break;
+                    }
+                }
+                int rows = group_end - group_start + 1;
+                int cols = group_len;
+                // 可変長配列を作成
+                double complex *bursts = malloc(sizeof(double complex) * rows * cols);
+                if (bursts) {
+                    // burst_catcherからコピー
+                    for (int r = 0; r < rows; ++r) {
+                        memcpy(bursts + r * cols, burst_catcher[sorted_idx[group_start + r]].buf,
+                               cols * sizeof(double complex));
+                    }
                 } else {
-                    printf("Burst Catcher: Channel %d, malloc failed\n", ch);
+                    fprintf(stderr, "Failed to allocate memory for bursts\n");
                     // メモリ確保に失敗した場合は強制終了
                     atomic_store(&running, false);
                     exit(EXIT_FAILURE);
                 }
-                catcher->len = 0;
-                catcher->active = false;
+                // 配列のポインタと行数・列数をリングバッファに書き込む
+                // （リーダー側でメモリ解放を忘れないこと！！）
+                brb_write(&brb, bursts, rows, cols);
+                // 送信済みチャネルのlenをリセット
+                for (int r = 0; r < rows; ++r) {
+                    BurstCatcher *sent = &burst_catcher[sorted_idx[group_start + r]];
+                    sent->len = 0;
+                }
+                // グループ化したチャネル分、idxを進める
+                idx = group_end + 1;
+            } else {
+                // バースト蓄積が完了していないチャネルはスキップ
+                idx++;
             }
-            // false→false: 何もしない
         }
 
         // 1つ前のCFAR結果とChannelizer出力を保存

@@ -19,8 +19,9 @@
 
 // バッファ要素：mallocした配列ポインタと長さ
 typedef struct {
-    double complex *ptr; // mallocされた配列のポインタ
-    int len;             // mallocされた配列の要素数
+    double complex *ptr; // mallocされた配列（2次元配列だが1次元配列として扱う）のポインタ
+    int rows;            // 行数
+    int cols;            // 列数
 } BrbElem;
 
 // BlockingRingBuffer構造体
@@ -34,8 +35,8 @@ typedef struct {
 } BlockingRingBuffer;
 
 bool brb_init(BlockingRingBuffer *rb);
-bool brb_write(BlockingRingBuffer *rb, double complex *src, int len);
-bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *len);
+bool brb_write(BlockingRingBuffer *rb, double complex *src, int rows, int cols);
+bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *rows, int *cols);
 bool brb_destroy(BlockingRingBuffer *rb);
 
 #endif // __BRB_H__

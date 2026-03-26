@@ -29,7 +29,8 @@ bool brb_init(BlockingRingBuffer *rb) {
     // buf配列の初期化（ポインタ・長さ）
     for (uint32_t i = 0; i < BUF_ELEM_2; ++i) {
         rb->buf[i].ptr = NULL;
-        rb->buf[i].len = 0;
+        rb->buf[i].rows = 0;
+        rb->buf[i].cols = 0;
     }
     return true;
 }
@@ -39,11 +40,12 @@ bool brb_init(BlockingRingBuffer *rb) {
  *
  * @param rb BlockingRingBuffer構造体へのポインタ
  * @param src 書き込むmalloc済み配列のポインタ
- * @param len 書き込むmalloc済み配列の要素数
+ * @param rows 書き込むmalloc済み配列の行数
+ * @param cols 書き込むmalloc済み配列の列数
  *
  * @return true 書き込みに成功した場合、false 失敗した場合
  */
-bool brb_write(BlockingRingBuffer *rb, double complex *src, int len) {
+bool brb_write(BlockingRingBuffer *rb, double complex *src, int rows, int cols) {
     if (pthread_mutex_lock(&rb->mutex) != 0) {
         fprintf(stderr, "[brb_write] pthread_mutex_lock failed\n");
         return false;
@@ -59,7 +61,8 @@ bool brb_write(BlockingRingBuffer *rb, double complex *src, int len) {
     uint32_t wi = rb->write_pos & BUF_MASK_2;
     // バッファに配列のポインタと長さを格納
     rb->buf[wi].ptr = src;
-    rb->buf[wi].len = len;
+    rb->buf[wi].rows = rows;
+    rb->buf[wi].cols = cols;
     // 書き込み位置を進める
     rb->write_pos++;
     if (pthread_cond_signal(&rb->not_empty) != 0) {
@@ -79,11 +82,12 @@ bool brb_write(BlockingRingBuffer *rb, double complex *src, int len) {
  *
  * @param rb BlockingRingBuffer構造体へのポインタ
  * @param dst 読み出した配列ポインタを格納するポインタへのポインタ
- * @param len 読み出した配列の要素数を格納するポインタ
+ * @param rows 読み出した配列の行数を格納するポインタ
+ * @param cols 読み出した配列の列数を格納するポインタ
  *
  * @return true 読み出しに成功した場合、false 失敗した場合
  */
-bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *len) {
+bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *rows, int *cols) {
     if (pthread_mutex_lock(&rb->mutex) != 0) {
         fprintf(stderr, "[brb_read] pthread_mutex_lock failed\n");
         return false;
@@ -99,10 +103,12 @@ bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *len) {
     uint32_t ri = rb->read_pos & BUF_MASK_2;
     // ポインタと長さを取得
     *dst = rb->buf[ri].ptr;
-    *len = rb->buf[ri].len;
+    *rows = rb->buf[ri].rows;
+    *cols = rb->buf[ri].cols;
     // バッファスロットを空に
     rb->buf[ri].ptr = NULL;
-    rb->buf[ri].len = 0;
+    rb->buf[ri].rows = 0;
+    rb->buf[ri].cols = 0;
     // 読み出し位置を進める
     rb->read_pos++;
     if (pthread_cond_signal(&rb->not_full) != 0) {
