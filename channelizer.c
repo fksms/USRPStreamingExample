@@ -412,18 +412,19 @@ void *channelizer_thread(void *arg) {
                 if (bursts) {
                     // burst_catcherからコピー
                     for (int r = 0; r < rows; ++r) {
+                        fprintf(stdout, "Burst Catcher: Channel %d\n", sorted_idx[group_start + r]);
                         memcpy(bursts + r * cols, burst_catcher[sorted_idx[group_start + r]].buf,
                                cols * sizeof(double complex));
                     }
+                    // 配列のポインタと行数・列数をリングバッファに書き込む
+                    // （リーダー側でメモリ解放を忘れないこと！！）
+                    brb_write(&brb, bursts, rows, cols);
                 } else {
                     fprintf(stderr, "Failed to allocate memory for bursts\n");
                     // メモリ確保に失敗した場合は強制終了
                     atomic_store(&running, false);
                     exit(EXIT_FAILURE);
                 }
-                // 配列のポインタと行数・列数をリングバッファに書き込む
-                // （リーダー側でメモリ解放を忘れないこと！！）
-                brb_write(&brb, bursts, rows, cols);
                 // 送信済みチャネルのlenをリセット
                 for (int r = 0; r < rows; ++r) {
                     BurstCatcher *sent = &burst_catcher[sorted_idx[group_start + r]];
