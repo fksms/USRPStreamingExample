@@ -32,11 +32,13 @@ typedef struct {
     pthread_mutex_t mutex;
     pthread_cond_t not_empty;
     pthread_cond_t not_full;
+    volatile bool stop;
 } BlockingRingBuffer;
 
 bool brb_init(BlockingRingBuffer *rb);
 bool brb_write(BlockingRingBuffer *rb, double complex *src, int rows, int cols);
 bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *rows, int *cols);
+bool brb_stop(BlockingRingBuffer *rb);
 bool brb_destroy(BlockingRingBuffer *rb);
 
 #endif // __BRB_H__

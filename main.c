@@ -1,5 +1,6 @@
 #include <getopt.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -42,7 +43,13 @@ void print_help(void) {
                     "    -h (print this help message)\n");
 }
 
+void handle_sigint(int sig) { atomic_store(&running, false); }
+
 int main(int argc, char *argv[]) {
+
+    // Register signal handler for SIGINT (Ctrl+C)
+    signal(SIGINT, handle_sigint);
+
     int option = 0;
 
     // ------------------For USRP RX-------------------
@@ -247,6 +254,14 @@ int main(int argc, char *argv[]) {
     }
 #endif // TX_TEST
     // ------------------------------------------------------------
+
+    while (atomic_load(&running)) {
+        sleep(1);
+    }
+    if (!brb_stop(&brb)) {
+        printf("Stop Blocking Ring Buffer failed\n");
+        return -1;
+    }
 
     // -------------------------Join thread------------------------
 #ifdef TX_TEST

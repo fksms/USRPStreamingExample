@@ -14,6 +14,7 @@
 bool brb_init(BlockingRingBuffer *rb) {
     rb->write_pos = 0;
     rb->read_pos = 0;
+    rb->stop = false;
     if (pthread_mutex_init(&rb->mutex, NULL) != 0) {
         fprintf(stderr, "[brb_init] pthread_mutex_init failed\n");
         return false;
@@ -52,6 +53,10 @@ bool brb_write(BlockingRingBuffer *rb, double complex *src, int rows, int cols) 
     }
     // バッファが満杯なら待機
     while (rb->write_pos - rb->read_pos >= BUF_ELEM_2) {
+        if (rb->stop) {
+            pthread_mutex_unlock(&rb->mutex);
+            return false;
+        }
         if (pthread_cond_wait(&rb->not_full, &rb->mutex) != 0) {
             fprintf(stderr, "[brb_write] pthread_cond_wait(not_full) failed\n");
             pthread_mutex_unlock(&rb->mutex);
@@ -94,6 +99,10 @@ bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *rows, int *cols
     }
     // バッファが空なら待機
     while (rb->write_pos == rb->read_pos) {
+        if (rb->stop) {
+            pthread_mutex_unlock(&rb->mutex);
+            return false;
+        }
         if (pthread_cond_wait(&rb->not_empty, &rb->mutex) != 0) {
             fprintf(stderr, "[brb_read] pthread_cond_wait(not_empty) failed\n");
             pthread_mutex_unlock(&rb->mutex);
@@ -118,6 +127,36 @@ bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *rows, int *cols
     }
     if (pthread_mutex_unlock(&rb->mutex) != 0) {
         fprintf(stderr, "[brb_read] pthread_mutex_unlock failed\n");
+        return false;
+    }
+    return true;
+}
+
+/**
+ * @brief BlockingRingBufferを停止状態にする。
+ *
+ * @param rb 停止対象のBlockingRingBuffer構造体へのポインタ
+ *
+ * @return true 停止に成功した場合、false 失敗した場合
+ */
+bool brb_stop(BlockingRingBuffer *rb) {
+    if (pthread_mutex_lock(&rb->mutex) != 0) {
+        fprintf(stderr, "[brb_stop] pthread_mutex_lock failed\n");
+        return false;
+    }
+    rb->stop = true;
+    if (pthread_cond_broadcast(&rb->not_empty) != 0) {
+        fprintf(stderr, "[brb_stop] pthread_cond_broadcast(not_empty) failed\n");
+        pthread_mutex_unlock(&rb->mutex);
+        return false;
+    }
+    if (pthread_cond_broadcast(&rb->not_full) != 0) {
+        fprintf(stderr, "[brb_stop] pthread_cond_broadcast(not_full) failed\n");
+        pthread_mutex_unlock(&rb->mutex);
+        return false;
+    }
+    if (pthread_mutex_unlock(&rb->mutex) != 0) {
+        fprintf(stderr, "[brb_stop] pthread_mutex_unlock failed\n");
         return false;
     }
     return true;

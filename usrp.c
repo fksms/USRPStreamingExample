@@ -282,7 +282,6 @@ void *usrp_rx_thread(void *arg) {
 
     // Stop
     atomic_store(&running, false);
-
     return NULL;
 }
 
@@ -319,10 +318,10 @@ void *usrp_tx_thread(void *arg) {
     int iq_len_raw = n_bits * sps;
     double complex iq_raw[iq_len_raw];
     if (fsk_modulate_at_rate(bits, n_bits, TX_SAMP_RATE, false, gauss_coef, gauss_len, iq_raw, &n_samples) != 0) {
-        fprintf(stderr, "変調に失敗しました\n");
+        fprintf(stderr, "Modulation failed\n");
         // データの変調に失敗した場合は強制終了
         atomic_store(&running, false);
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
     printf("Modulated %d bits into %d samples\n", n_bits, n_samples);
@@ -415,7 +414,6 @@ void *usrp_tx_thread(void *arg) {
 
     // Stop
     atomic_store(&running, false);
-
     return NULL;
 }
 

@@ -20,8 +20,6 @@ extern BlockingRingBuffer brb;
 // リングバッファから配列を受け取り、freeするだけのスレッド
 void *reader_thread(void *arg) {
 
-    int burst_count = 0;
-
     // チャネライザから出力された信号のSPSを計算
     int sps = get_samples_per_symbol(get_channel_spacing_hz());
 
@@ -34,10 +32,10 @@ void *reader_thread(void *arg) {
         printf("Failed to build Gaussian filters\n");
         // ガウスフィルタの構築に失敗した場合は強制終了
         atomic_store(&running, false);
-        exit(EXIT_FAILURE);
+        return NULL;
     }
 
-    while (atomic_load(&running) && burst_count < 20) {
+    while (atomic_load(&running)) {
         double complex *data = NULL;
         int rows = 0;
         int cols = 0;
@@ -62,8 +60,9 @@ void *reader_thread(void *arg) {
                 // チャネライザの出力をFSK/GFSK復調してビット列を回復
                 if (fsk_demodulate_at_rate(row_data, cols, get_channel_spacing_hz(), true, gauss_coef, gauss_len,
                                            rx_bits_capacity, rx_bits, &n_rx_bits) != 0) {
-                    printf("demodulation failed\n");
-                    continue;
+                    printf("Demodulation failed\n");
+                    atomic_store(&running, false);
+                    return NULL;
                 }
 
                 // 復調したビット列を表示
@@ -75,12 +74,10 @@ void *reader_thread(void *arg) {
             }
 
             free(data);
-            burst_count++;
         }
     }
 
     // Stop
     atomic_store(&running, false);
-
     return NULL;
 }

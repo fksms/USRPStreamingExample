@@ -418,12 +418,17 @@ void *channelizer_thread(void *arg) {
                     }
                     // 配列のポインタと行数・列数をリングバッファに書き込む
                     // （リーダー側でメモリ解放を忘れないこと！！）
-                    brb_write(&brb, bursts, rows, cols);
+                    if (!brb_write(&brb, bursts, rows, cols)) {
+                        fprintf(stderr, "Failed to write bursts to ring buffer\n");
+                        free(bursts);
+                        atomic_store(&running, false);
+                        return NULL;
+                    }
                 } else {
                     fprintf(stderr, "Failed to allocate memory for bursts\n");
                     // メモリ確保に失敗した場合は強制終了
                     atomic_store(&running, false);
-                    exit(EXIT_FAILURE);
+                    return NULL;
                 }
                 // 送信済みチャネルのlenをリセット
                 for (int r = 0; r < rows; ++r) {
@@ -445,7 +450,6 @@ void *channelizer_thread(void *arg) {
 
     // Stop
     atomic_store(&running, false);
-
     return NULL;
 }
 
