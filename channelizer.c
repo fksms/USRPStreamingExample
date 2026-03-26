@@ -101,6 +101,59 @@ void channelizer_reset(channelizer_handle *handle) {
  * @param power_per_channel [num_channels] 各チャネルの出力電力を格納する配列
  *
  * @return なし（void）
+ *
+ * @note
+ *
+ * 出力配列 channelizer_out の周波数配置は以下を参照
+ *
+ * - 偶数チャネル（NUM_CHANNELS=2N）の場合
+ *
+ *   [low freq] ↑
+ *     channelizer_out[N+1]
+ *     channelizer_out[N+2]
+ *     ...
+ *     channelizer_out[2N-1]
+ *     channelizer_out[0] (Center Frequency)
+ *     channelizer_out[1]
+ *     ...
+ *     channelizer_out[N-2]
+ *     channelizer_out[N-1]
+ *   ↓ [high freq]
+ *
+ *   ※channelizer_out[N] は、低い方と高い方の両端が重なっており、両方の周波数成分が半分ずつ含まれている（折り返し点）
+ *
+ *   例：NUM_CHANNELS=8 の場合
+ *     channelizer_out[0] ...中心周波数
+ *     channelizer_out[5] ～ channelizer_out[7] ...低周波側
+ *     channelizer_out[1] ～ channelizer_out[3] ...高周波側
+ *     channelizer_out[4] ...低・高周波の折り返し
+ *
+ *   周波数順に並べると以下のようなイメージ：
+ *     [low freq] channelizer_out[5] [6] [7] [0] [1] [2] [3] [high freq]
+ *
+ * - 奇数チャネル（NUM_CHANNELS=2N+1）の場合
+ *
+ *   [low freq] ↑
+ *     channelizer_out[N+1]
+ *     channelizer_out[N+2]
+ *     ...
+ *     channelizer_out[2N]
+ *     channelizer_out[0] (Center Frequency)
+ *     channelizer_out[1]
+ *     ...
+ *     channelizer_out[N-1]
+ *     channelizer_out[N]
+ *   ↓ [high freq]
+ *
+ *   ※奇数の場合は折り返し点（両端が重なる点）は存在しない
+ *
+ *   例：NUM_CHANNELS=7 の場合
+ *     channelizer_out[0] ...中心周波数
+ *     channelizer_out[4] ～ channelizer_out[6] ...低周波側
+ *     channelizer_out[1] ～ channelizer_out[3] ...高周波側
+ *
+ *   周波数順に並べると以下のようなイメージ：
+ *     [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
  */
 void channelizer_process_block(int num_channels, int time_slots, int coef_per_stage,
                                double complex (*reg)[coef_per_stage], const double (*split_filter)[coef_per_stage],
@@ -139,59 +192,6 @@ void channelizer_process_block(int num_channels, int time_slots, int coef_per_st
             power_per_channel[ch] += re * re + im * im;
         }
     }
-
-    // （出力配列 channelizer_out の周波数配置は以下を参照）
-    //
-    //
-    // - 偶数チャネル（NUM_CHANNELS=2N）の場合
-    //
-    // [low freq] ↑
-    //   channelizer_out[N+1]
-    //   channelizer_out[N+2]
-    //   ...
-    //   channelizer_out[2N-1]
-    //   channelizer_out[0] (Center Frequency)
-    //   channelizer_out[1]
-    //   ...
-    //   channelizer_out[N-2]
-    //   channelizer_out[N-1]
-    // ↓ [high freq]
-    //
-    // ※channelizer_out[N] は、低い方と高い方の両端が重なっており、両方の周波数成分が半分ずつ含まれている（折り返し点）
-    //
-    // 例：NUM_CHANNELS=8 の場合
-    //   channelizer_out[0] ...中心周波数
-    //   channelizer_out[5] ～ channelizer_out[7] ...低周波側
-    //   channelizer_out[1] ～ channelizer_out[3] ...高周波側
-    //   channelizer_out[4] ...低・高周波の折り返し
-    //
-    // 周波数順に並べると以下のようなイメージ：
-    //   [low freq] channelizer_out[5] [6] [7] [0] [1] [2] [3] [high freq]
-    //
-    //
-    // - 奇数チャネル（NUM_CHANNELS=2N+1）の場合
-    //
-    // [low freq] ↑
-    //   channelizer_out[N+1]
-    //   channelizer_out[N+2]
-    //   ...
-    //   channelizer_out[2N]
-    //   channelizer_out[0] (Center Frequency)
-    //   channelizer_out[1]
-    //   ...
-    //   channelizer_out[N-1]
-    //   channelizer_out[N]
-    // ↓ [high freq]
-    //
-    // ※奇数の場合は折り返し点（両端が重なる点）は存在しない
-    //
-    // 例：NUM_CHANNELS=7 の場合
-    //   channelizer_out[0] ...中心周波数
-    //   channelizer_out[4] ～ channelizer_out[6] ...低周波側
-    //   channelizer_out[1] ～ channelizer_out[3] ...高周波側
-    //
-    // 周波数順に並べると以下のようなイメージ：
-    //   [low freq] channelizer_out[4] [5] [6] [0] [1] [2] [3] [high freq]
 }
 
 // Channelizerのスレッド関数
