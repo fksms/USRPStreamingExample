@@ -354,7 +354,6 @@ void *channelizer_thread(void *arg) {
                     memcpy(&catcher->buf[catcher->len], channelizer_out[ch], sizeof(double complex) * TIME_SLOTS);
                     catcher->len += TIME_SLOTS;
                 }
-
             }
             // true→false: 現在のフレームを追記して確定
             else if (prv && !cur) {
@@ -409,24 +408,23 @@ void *channelizer_thread(void *arg) {
                 int cols = group_len;
                 // 可変長配列を作成
                 double complex *bursts = malloc(sizeof(double complex) * rows * cols);
-                if (bursts) {
-                    // burst_catcherからコピー
-                    for (int r = 0; r < rows; ++r) {
-                        fprintf(stdout, "Burst Catcher: Channel %d\n", sorted_idx[group_start + r]);
-                        memcpy(bursts + r * cols, burst_catcher[sorted_idx[group_start + r]].buf,
-                               cols * sizeof(double complex));
-                    }
-                    // 配列のポインタと行数・列数をリングバッファに書き込む
-                    // （リーダー側でメモリ解放を忘れないこと！！）
-                    if (!brb_write(&brb, bursts, rows, cols)) {
-                        fprintf(stderr, "Failed to write bursts to ring buffer\n");
-                        free(bursts);
-                        atomic_store(&running, false);
-                        return NULL;
-                    }
-                } else {
+                if (!bursts) {
                     fprintf(stderr, "Failed to allocate memory for bursts\n");
                     // メモリ確保に失敗した場合は強制終了
+                    atomic_store(&running, false);
+                    return NULL;
+                }
+                // burst_catcherからコピー
+                for (int r = 0; r < rows; ++r) {
+                    fprintf(stdout, "Burst Catcher: Channel %d\n", sorted_idx[group_start + r]);
+                    memcpy(bursts + r * cols, burst_catcher[sorted_idx[group_start + r]].buf,
+                           cols * sizeof(double complex));
+                }
+                // 配列のポインタと行数・列数をリングバッファに書き込む
+                // （リーダー側でメモリ解放を忘れないこと！！）
+                if (!brb_write(&brb, bursts, rows, cols)) {
+                    fprintf(stderr, "Failed to write bursts to ring buffer\n");
+                    free(bursts);
                     atomic_store(&running, false);
                     return NULL;
                 }

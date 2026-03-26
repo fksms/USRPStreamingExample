@@ -27,7 +27,7 @@ bool brb_init(BlockingRingBuffer *rb) {
         fprintf(stderr, "[brb_init] pthread_cond_init(not_full) failed\n");
         return false;
     }
-    // buf配列の初期化（ポインタ・長さ）
+    // buf配列の初期化
     for (uint32_t i = 0; i < BUF_ELEM_2; ++i) {
         rb->buf[i].ptr = NULL;
         rb->buf[i].rows = 0;
@@ -64,7 +64,7 @@ bool brb_write(BlockingRingBuffer *rb, double complex *src, int rows, int cols) 
         }
     }
     uint32_t wi = rb->write_pos & BUF_MASK_2;
-    // バッファに配列のポインタと長さを格納
+    // バッファに書き込む
     rb->buf[wi].ptr = src;
     rb->buf[wi].rows = rows;
     rb->buf[wi].cols = cols;
@@ -110,7 +110,7 @@ bool brb_read(BlockingRingBuffer *rb, double complex **dst, int *rows, int *cols
         }
     }
     uint32_t ri = rb->read_pos & BUF_MASK_2;
-    // ポインタと長さを取得
+    // バッファから読み出す
     *dst = rb->buf[ri].ptr;
     *rows = rb->buf[ri].rows;
     *cols = rb->buf[ri].cols;

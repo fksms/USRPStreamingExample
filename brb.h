@@ -17,11 +17,11 @@
 #error "BUF_ELEM_2 must be a power of 2"
 #endif
 
-// バッファ要素：mallocした配列ポインタと長さ
+// Buffer要素構造体
 typedef struct {
     double complex *ptr; // mallocされた配列（2次元配列だが1次元配列として扱う）のポインタ
-    int rows;            // 行数
-    int cols;            // 列数
+    int rows;            // 行数（チャネル数）
+    int cols;            // 列数（時間スロット数）
 } BrbElem;
 
 // BlockingRingBuffer構造体
