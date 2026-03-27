@@ -53,16 +53,16 @@ int main(int argc, char *argv[]) {
     int option = 0;
 
     // ------------------For USRP RX-------------------
-    double rx_freq = 924e6;
+    double rx_freq = 924.3e6; // 42chと43chの間
     double rx_gain = 30.0;
-    size_t rx_channel = 1;
+    size_t rx_channel = 0;
     char *rx_antenna = "RX2";
     // ------------------------------------------------
 
 #ifdef TX_TEST
     // ------------------For USRP TX-------------------
-    double tx_freq = 922e6;
-    double tx_gain = 15.0;
+    double tx_freq = 922.3e6;
+    double tx_gain = 30.0;
     size_t tx_channel = 1;
     char *tx_antenna = "TX/RX";
     // ------------------------------------------------

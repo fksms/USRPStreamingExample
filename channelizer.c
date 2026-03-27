@@ -176,7 +176,7 @@ void channelizer_process_block(int num_channels, int time_slots, int coef_per_st
         for (int ch = 0; ch < num_channels; ++ch) {
             double complex filter_output = 0.0;
             for (int kk = 0; kk < coef_per_stage; ++kk) {
-                filter_output += reg[ch][kk] * split_filter[ch][kk];
+                filter_output += reg[ch][coef_per_stage - 1 - kk] * split_filter[ch][kk];
             }
             fftw->in[ch] = filter_output;
         }

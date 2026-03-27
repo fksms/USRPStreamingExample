@@ -12,7 +12,7 @@
  * COEF_PER_STAGE: チャンネルあたりのFIRフィルタのtap数
  * KAISER_BETA: カイザー窓のbetaパラメータ
  * ---------------------------------------------------------------*/
-#define INPUT_SAMPS 30000
+#define INPUT_SAMPS 10000 // 1[msec]分のサンプル数（10MHzサンプリングのため）
 #define NUM_CHANNELS 50
 #define COEF_PER_STAGE 16
 #define KAISER_BETA 8.6
