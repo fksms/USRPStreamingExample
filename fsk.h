@@ -6,10 +6,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define SYMBOL_RATE 50e3 // シンボルレート [bps]
-#define MOD_INDEX 0.5    // 変調指数 (h) (0.5〜1.0)
-#define BT 0.5           // Gaussian BT積
-#define GAUSS_SPAN 4     // ガウスフィルタスパン [symbols]
+#define SYMBOL_RATE 100e3 // シンボルレート [bps]
+#define MOD_INDEX 0.5     // 変調指数 (h) (0.5〜1.0)
+#define BT 0.5            // Gaussian BT積
+#define GAUSS_SPAN 4      // ガウスフィルタスパン [symbols]
 
 int get_samples_per_symbol(double sample_rate_hz);
 int get_gaussian_filter_length(double sample_rate_hz);

@@ -94,9 +94,9 @@ int build_gaussian_filter_for_rate(double sample_rate_hz, double *gauss_coef, in
  */
 int fsk_modulate_at_rate(const uint8_t *bits, int n_bits, double sample_rate_hz, bool use_gaussian,
                          const double *gauss_coef, int gauss_len, double complex *iq_out, int *n_samples) {
-    // サンプル/シンボル数を計算
+    // サンプルレートからシンボルあたりのサンプル数（SPS）を計算
     int sps = get_samples_per_symbol(sample_rate_hz);
-    if (sps < 0)
+    if (sps <= 0 || n_bits <= 0 || !iq_out || !n_samples || (use_gaussian && (!gauss_coef || gauss_len <= 0)))
         return -1;
 
     // アップサンプル後の長さ
@@ -196,7 +196,8 @@ int fsk_demodulate_at_rate(const double complex *iq_in, int n_samples, double sa
                            const double *gauss_coef, int gauss_len, int max_bits, uint8_t *bits_out, int *n_bits_out) {
     // サンプルレートからシンボルあたりのサンプル数（SPS）を計算
     int sps = get_samples_per_symbol(sample_rate_hz);
-    if (sps <= 0 || n_samples < 2 || max_bits <= 0 || !n_bits_out)
+    if (sps <= 0 || n_samples < 2 || max_bits <= 0 || !n_bits_out || !bits_out ||
+        (use_gaussian && (!gauss_coef || gauss_len <= 0)))
         return -1;
 
     // 位相差系列の長さ（n_samples-1）
@@ -206,7 +207,7 @@ int fsk_demodulate_at_rate(const double complex *iq_in, int n_samples, double sa
     if (!discr)
         return -1;
 
-    // IQ信号から隣接サンプル間の位相差（Δφ）を計算
+    // 隣接サンプル間の位相差（瞬時周波数偏移）を計算
     for (int n = 1; n < n_samples; ++n) {
         double complex diff = conj(iq_in[n - 1]) * iq_in[n];
         discr[n - 1] = atan2(cimag(diff), creal(diff));

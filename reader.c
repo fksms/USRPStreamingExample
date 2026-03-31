@@ -8,6 +8,7 @@
 #include "brb.h"
 #include "channelizer.h"
 #include "fsk.h"
+#include "packet.h"
 
 // ---------------------Status---------------------
 extern _Atomic bool running;
@@ -20,10 +21,10 @@ extern BlockingRingBuffer brb;
 // リングバッファから配列を受け取り、freeするだけのスレッド
 void *reader_thread(void *arg) {
 
-    int counter = 0;
+    // int counter = 0;
 
     // チャネライザから出力された信号のSPSを計算
-    // int sps = get_samples_per_symbol(get_channel_spacing_hz());
+    int sps = get_samples_per_symbol(get_channel_spacing_hz());
 
     // ガウスフィルタ係数の長さを計算
     int gauss_len = get_gaussian_filter_length(get_channel_spacing_hz());
@@ -31,7 +32,7 @@ void *reader_thread(void *arg) {
     // ガウスフィルタ係数の構築
     double gauss_coef[gauss_len];
     if (build_gaussian_filter_for_rate(get_channel_spacing_hz(), gauss_coef, gauss_len) != 0) {
-        printf("Failed to build Gaussian filters\n");
+        fprintf(stderr, "Failed to build Gaussian filters\n");
         // ガウスフィルタの構築に失敗した場合は強制終了
         atomic_store(&running, false);
         return NULL;
@@ -49,49 +50,49 @@ void *reader_thread(void *arg) {
             return NULL;
         }
 
-        fprintf(stdout, "Reader: Received burst of length %d samples\n", cols);
+        fprintf(stdout, "\nReader: Received burst of length %d samples\n", cols);
 
         for (int i = 0; i < rows; ++i) {
 
             // 受け取ったデータの長さから復調可能なビット数を計算
-            // int rx_bits_capacity = cols / sps;
+            int rx_bits_capacity = cols / sps;
 
             // 復調ビット列格納用バッファ
-            // uint8_t rx_bits[rx_bits_capacity];
+            uint8_t rx_bits[rx_bits_capacity];
 
             // 復調されたビット数
-            // int n_rx_bits = 0;
+            int n_rx_bits = 0;
 
             // 1行分のチャネル出力を取得
             double complex *row_data = &data[i * cols];
 
-            // ファイル名生成
-            char filename[32];
-            snprintf(filename, sizeof(filename), "output_%d.csv", counter + 1);
+            // ---------- ファイル出力（デバッグ用） ----------
+            // char filename[32];
+            // snprintf(filename, sizeof(filename), "output_%d.csv", counter + 1);
 
-            FILE *fp = fopen(filename, "w");
-            if (!fp) {
-                perror("Failed to open output_X.csv");
-                free(data);
-                atomic_store(&running, false);
-                return NULL;
-            }
-
-            // CSV出力: 実部,虚部
-            for (int j = 0; j < cols; ++j) {
-                fprintf(fp, "%lf,%lf\n", creal(row_data[j]), cimag(row_data[j]));
-            }
-
-            fclose(fp);
-
-            // チャネライザの出力をFSK/GFSK復調してビット列を回復
-            // if (fsk_demodulate_at_rate(row_data, cols, get_channel_spacing_hz(), true, gauss_coef, gauss_len,
-            //                            rx_bits_capacity, rx_bits, &n_rx_bits) != 0) {
-            //     fprintf(stderr, "Demodulation failed\n");
-            //     // 復調に失敗した場合は強制終了
+            // FILE *fp = fopen(filename, "w");
+            // if (!fp) {
+            //     perror("Failed to open output_X.csv");
+            //     free(data);
             //     atomic_store(&running, false);
             //     return NULL;
             // }
+
+            // for (int j = 0; j < cols; ++j) {
+            //     fprintf(fp, "%lf,%lf\n", creal(row_data[j]), cimag(row_data[j]));
+            // }
+
+            // fclose(fp);
+            // ----------------------------------------------
+
+            // チャネライザの出力をFSK/GFSK復調してビット列を回復
+            if (fsk_demodulate_at_rate(row_data, cols, get_channel_spacing_hz(), true, gauss_coef, gauss_len,
+                                       rx_bits_capacity, rx_bits, &n_rx_bits) != 0) {
+                fprintf(stderr, "Demodulation failed\n");
+                // 復調に失敗した場合は強制終了
+                atomic_store(&running, false);
+                return NULL;
+            }
 
             // 復調したビット列を表示
             // fprintf(stdout, "Demodulated bits (%d bits): ", n_rx_bits);
@@ -99,9 +100,14 @@ void *reader_thread(void *arg) {
             //     fprintf(stdout, "%d", rx_bits[j]);
             // }
             // fprintf(stdout, "\n");
+
+            // フレーム抽出
+            extract_frame(rx_bits, n_rx_bits);
+
+            fprintf(stdout, "\n");
         }
 
-        counter++;
+        // counter++;
         free(data);
     }
 
