@@ -6,12 +6,14 @@
 #define PREAMBLE_MIN 4    // [Bytes]
 #define PREAMBLE_MAX 1000 // [Bytes]
 
-void extract_frame(const uint8_t *rx_bits, int n_rx_bits) {
+void analyze_packet(const uint8_t *rx_bits, int n_rx_bits) {
     // プリアンブルパターン（8ビット）
-    const uint8_t preamble_pattern[8] = {0, 1, 0, 1, 0, 1, 0, 1};
+    const uint8_t preamble_pattern[8] = {0, 1, 0, 1, 0, 1, 0, 1}; // 0x55
     // SFDパターン
-    const uint8_t sfd1[16] = {0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0}; // 0x6F4E
-    const uint8_t sfd2[16] = {1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0}; // 0x904E
+    const uint8_t fec_coded_sfd1[16] = {0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0};   // 0x6F4E
+    const uint8_t fec_coded_sfd2[16] = {0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1};   // 0x632D
+    const uint8_t fec_uncoded_sfd1[16] = {1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0}; // 0x904E
+    const uint8_t fec_uncoded_sfd2[16] = {0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0}; // 0x7A0E
 
     // プリアンブルの開始位置と長さ
     int preamble_start = -1;
@@ -62,10 +64,18 @@ void extract_frame(const uint8_t *rx_bits, int n_rx_bits) {
 
     // SFD比較
     bool sfd_match = false;
-    if (memcmp(&rx_bits[sfd_bitpos], sfd1, sfd_len) == 0) {
+    if (memcmp(&rx_bits[sfd_bitpos], fec_coded_sfd1, sfd_len) == 0) {
         sfd_match = true;
-    } else if (memcmp(&rx_bits[sfd_bitpos], sfd2, sfd_len) == 0) {
+        fprintf(stdout, "SFD matched: FEC coded SFD1\n");
+    } else if (memcmp(&rx_bits[sfd_bitpos], fec_coded_sfd2, sfd_len) == 0) {
         sfd_match = true;
+        fprintf(stdout, "SFD matched: FEC coded SFD2\n");
+    } else if (memcmp(&rx_bits[sfd_bitpos], fec_uncoded_sfd1, sfd_len) == 0) {
+        sfd_match = true;
+        fprintf(stdout, "SFD matched: FEC uncoded SFD1\n");
+    } else if (memcmp(&rx_bits[sfd_bitpos], fec_uncoded_sfd2, sfd_len) == 0) {
+        sfd_match = true;
+        fprintf(stdout, "SFD matched: FEC uncoded SFD2\n");
     }
 
     // SFDが見つからない場合は終了

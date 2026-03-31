@@ -18,8 +18,7 @@ extern _Atomic bool running;
 extern BlockingRingBuffer brb;
 // ------------------------------------------------
 
-// リングバッファから配列を受け取り、freeするだけのスレッド
-void *reader_thread(void *arg) {
+void *demod_thread(void *arg) {
 
     // int counter = 0;
 
@@ -50,7 +49,7 @@ void *reader_thread(void *arg) {
             return NULL;
         }
 
-        fprintf(stdout, "\nReader: Received burst of length %d samples\n", cols);
+        fprintf(stdout, "\nDemod thread: Received burst of %d samples for %d channels\n", cols, rows);
 
         for (int i = 0; i < rows; ++i) {
 
@@ -101,8 +100,8 @@ void *reader_thread(void *arg) {
             // }
             // fprintf(stdout, "\n");
 
-            // フレーム抽出
-            extract_frame(rx_bits, n_rx_bits);
+            // パケットの解析
+            analyze_packet(rx_bits, n_rx_bits);
 
             fprintf(stdout, "\n");
         }

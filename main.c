@@ -12,8 +12,8 @@
 #include "brb.h"
 #include "channelizer.h"
 #include "channelizer_test.h"
+#include "demod.h"
 #include "lfrb.h"
-#include "reader.h"
 #include "usrp.h"
 
 // 送信テスト時は以下をコメントアウト
@@ -26,7 +26,7 @@ _Atomic bool running = true;
 // ---------------------Buffer---------------------
 // USRP -> Channelizer のリングバッファ
 LockFreeRingBuffer lfrb;
-// Channelizer -> Reader のリングバッファ
+// Channelizer -> Demod のリングバッファ
 BlockingRingBuffer brb;
 // ------------------------------------------------
 
@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
     if (run_channelizer_single_tone_test || run_modem_loopback_channel >= 0) {
         channelizer_handle channelizer;
         if (channelizer_setup(&channelizer)) {
-            printf("Setup channelizer failed\n");
+            fprintf(stderr, "Setup channelizer failed\n");
             return -1;
         }
 
@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
     // Init the ring buffer
     lfrb_init(&lfrb);
     if (!brb_init(&brb)) {
-        printf("Init Blocking Ring Buffer failed\n");
+        fprintf(stderr, "Init Blocking Ring Buffer failed\n");
         return -1;
     }
 
@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
 
     // Setup USRP
     if (usrp_setup(&usrp)) {
-        printf("Setup USRP failed\n");
+        fprintf(stderr, "Setup USRP failed\n");
         return -1;
     }
 
@@ -161,7 +161,7 @@ int main(int argc, char *argv[]) {
 
     // Setup USRP RX
     if (usrp_rx_setup(&usrp_rx)) {
-        printf("Setup USRP RX failed\n");
+        fprintf(stderr, "Setup USRP RX failed\n");
         return -1;
     }
 
@@ -180,7 +180,7 @@ int main(int argc, char *argv[]) {
 
     // Setup USRP TX
     if (usrp_tx_setup(&usrp_tx)) {
-        printf("Setup USRP TX failed\n");
+        fprintf(stderr, "Setup USRP TX failed\n");
         return -1;
     }
 #endif // TX_TEST
@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
     // Setup channelizer
     channelizer_handle channelizer;
     if (channelizer_setup(&channelizer)) {
-        printf("Setup channelizer failed\n");
+        fprintf(stderr, "Setup channelizer failed\n");
         return -1;
     }
     // ------------------------------------------------------------
@@ -199,49 +199,49 @@ int main(int argc, char *argv[]) {
 
     // Initialize pthread attributes
     if (pthread_attr_init(&attr)) {
-        printf("Init pthread attributes failed\n");
+        fprintf(stderr, "Init pthread attributes failed\n");
         return -1;
     }
 
     // Set scheduler policy and priority of pthread
     if (pthread_attr_setschedpolicy(&attr, SCHED_FIFO)) {
-        printf("Pthread setschedpolicy failed\n");
+        fprintf(stderr, "Pthread setschedpolicy failed\n");
         return -1;
     }
 
     param.sched_priority = 99;
 
     if (pthread_attr_setschedparam(&attr, &param)) {
-        printf("Pthread setschedparam failed\n");
+        fprintf(stderr, "Pthread setschedparam failed\n");
         return -1;
     }
 
     // Use scheduling parameters of attr
     if (pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED)) {
-        printf("Pthread setinheritsched failed\n");
+        fprintf(stderr, "Pthread setinheritsched failed\n");
         return -1;
     }
     // ------------------------------------------------------------
 
     // ------------------------Create thread-----------------------
-    // Create reader thread
-    pthread_t readerThread;
-    if (pthread_create(&readerThread, &attr, reader_thread, NULL)) {
-        printf("Create reader thread failed\n");
+    // Create demod thread
+    pthread_t demodThread;
+    if (pthread_create(&demodThread, &attr, demod_thread, NULL)) {
+        fprintf(stderr, "Create demod thread failed\n");
         return -1;
     }
 
     // Create channelizer thread
     pthread_t channelizerThread;
     if (pthread_create(&channelizerThread, &attr, channelizer_thread, (void *)&channelizer)) {
-        printf("Create channelizer thread failed\n");
+        fprintf(stderr, "Create channelizer thread failed\n");
         return -1;
     }
 
     // Create USRP RX thread
     pthread_t usrpRxThread;
     if (pthread_create(&usrpRxThread, &attr, usrp_rx_thread, (void *)&usrp_rx)) {
-        printf("Create USRP RX thread failed\n");
+        fprintf(stderr, "Create USRP RX thread failed\n");
         return -1;
     }
 
@@ -249,7 +249,7 @@ int main(int argc, char *argv[]) {
     // Create USRP TX thread
     pthread_t usrpTxThread;
     if (pthread_create(&usrpTxThread, &attr, usrp_tx_thread, (void *)&usrp_tx)) {
-        printf("Create USRP TX thread failed\n");
+        fprintf(stderr, "Create USRP TX thread failed\n");
         return -1;
     }
 #endif // TX_TEST
@@ -259,7 +259,7 @@ int main(int argc, char *argv[]) {
         sleep(1);
     }
     if (!brb_stop(&brb)) {
-        printf("Stop Blocking Ring Buffer failed\n");
+        fprintf(stderr, "Stop Blocking Ring Buffer failed\n");
         return -1;
     }
 
@@ -267,26 +267,26 @@ int main(int argc, char *argv[]) {
 #ifdef TX_TEST
     // Join USRP TX thread
     if (pthread_join(usrpTxThread, NULL)) {
-        printf("Join USRP TX thread failed\n");
+        fprintf(stderr, "Join USRP TX thread failed\n");
         return -1;
     }
 #endif // TX_TEST
 
     // Join USRP RX thread
     if (pthread_join(usrpRxThread, NULL)) {
-        printf("Join USRP RX thread failed\n");
+        fprintf(stderr, "Join USRP RX thread failed\n");
         return -1;
     }
 
     // Join channelizer thread
     if (pthread_join(channelizerThread, NULL)) {
-        printf("Join channelizer thread failed\n");
+        fprintf(stderr, "Join channelizer thread failed\n");
         return -1;
     }
 
-    // Join reader thread
-    if (pthread_join(readerThread, NULL)) {
-        printf("Join reader thread failed\n");
+    // Join demod thread
+    if (pthread_join(demodThread, NULL)) {
+        fprintf(stderr, "Join demod thread failed\n");
         return -1;
     }
     // ------------------------------------------------------------
@@ -294,34 +294,34 @@ int main(int argc, char *argv[]) {
     // ----------------------------Close---------------------------
     // Close channelizer
     if (channelizer_close(&channelizer)) {
-        printf("Close channelizer failed\n");
+        fprintf(stderr, "Close channelizer failed\n");
         return -1;
     }
 
 #ifdef TX_TEST
     // Close USRP TX
     if (usrp_tx_close(&usrp_tx)) {
-        printf("Close USRP TX failed\n");
+        fprintf(stderr, "Close USRP TX failed\n");
         return -1;
     }
 #endif // TX_TEST
 
     // Close USRP RX
     if (usrp_rx_close(&usrp_rx)) {
-        printf("Close USRP RX failed\n");
+        fprintf(stderr, "Close USRP RX failed\n");
         return -1;
     }
 
     // Close USRP
     if (usrp_close(&usrp)) {
-        printf("Close USRP failed\n");
+        fprintf(stderr, "Close USRP failed\n");
         return -1;
     }
     // ------------------------------------------------------------
 
     // Destroy the ring buffer
     if (!brb_destroy(&brb)) {
-        printf("Destroy Blocking Ring Buffer failed\n");
+        fprintf(stderr, "Destroy Blocking Ring Buffer failed\n");
         return -1;
     }
 

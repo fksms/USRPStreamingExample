@@ -29,7 +29,7 @@ int usrp_setup(uhd_usrp_handle *usrp) {
     // Create USRP
     error = uhd_usrp_make(usrp, device_args);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
@@ -54,53 +54,53 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
     // Set antenna
     error = uhd_usrp_set_rx_antenna(usrp, usrp_rx->rx_antenna, usrp_rx->rx_channel);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Set rate
     error = uhd_usrp_set_rx_rate(usrp, RX_SAMP_RATE, usrp_rx->rx_channel);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // See what rate actually is
     double rx_rate;
     error = uhd_usrp_get_rx_rate(usrp, usrp_rx->rx_channel, &rx_rate);
-    printf("Actual RX rate: %f Sps...\n", rx_rate);
+    fprintf(stdout, "Actual RX rate: %f Sps...\n", rx_rate);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Set gain
     error = uhd_usrp_set_rx_gain(usrp, usrp_rx->rx_gain, usrp_rx->rx_channel, "");
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // See what gain actually is
     error = uhd_usrp_get_rx_gain(usrp, usrp_rx->rx_channel, "", &usrp_rx->rx_gain);
-    printf("Actual RX gain: %f dB...\n", usrp_rx->rx_gain);
+    fprintf(stdout, "Actual RX gain: %f dB...\n", usrp_rx->rx_gain);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Set frequency
     error = uhd_usrp_set_rx_freq(usrp, &tune_request, usrp_rx->rx_channel, &tune_result);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // See what frequency actually is
     error = uhd_usrp_get_rx_freq(usrp, usrp_rx->rx_channel, &usrp_rx->rx_freq);
-    printf("Actual RX frequency: %f Hz...\n", usrp_rx->rx_freq);
+    fprintf(stdout, "Actual RX frequency: %f Hz...\n", usrp_rx->rx_freq);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
@@ -111,21 +111,21 @@ int usrp_rx_setup(uhd_usrp_rx_handle *usrp_rx) {
     // Create RX streamer
     error = uhd_rx_streamer_make(&usrp_rx->rx_streamer);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Create RX metadata
     error = uhd_rx_metadata_make(&usrp_rx->rx_metadata);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Set up streamer
     error = uhd_usrp_get_rx_stream(usrp, &stream_args, usrp_rx->rx_streamer);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
@@ -150,53 +150,53 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
     // Set antenna
     error = uhd_usrp_set_tx_antenna(usrp, usrp_tx->tx_antenna, usrp_tx->tx_channel);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Set rate
     error = uhd_usrp_set_tx_rate(usrp, TX_SAMP_RATE, usrp_tx->tx_channel);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // See what rate actually is
     double tx_rate;
     error = uhd_usrp_get_tx_rate(usrp, usrp_tx->tx_channel, &tx_rate);
-    printf("Actual TX rate: %f Sps...\n", tx_rate);
+    fprintf(stdout, "Actual TX rate: %f Sps...\n", tx_rate);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Set gain
     error = uhd_usrp_set_tx_gain(usrp, usrp_tx->tx_gain, usrp_tx->tx_channel, "");
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // See what gain actually is
     error = uhd_usrp_get_tx_gain(usrp, usrp_tx->tx_channel, "", &usrp_tx->tx_gain);
-    printf("Actual TX gain: %f dB...\n", usrp_tx->tx_gain);
+    fprintf(stdout, "Actual TX gain: %f dB...\n", usrp_tx->tx_gain);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Set frequency
     error = uhd_usrp_set_tx_freq(usrp, &tune_request, usrp_tx->tx_channel, &tune_result);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // See what frequency actually is
     error = uhd_usrp_get_tx_freq(usrp, usrp_tx->tx_channel, &usrp_tx->tx_freq);
-    printf("Actual TX frequency: %f Hz...\n", usrp_tx->tx_freq);
+    fprintf(stdout, "Actual TX frequency: %f Hz...\n", usrp_tx->tx_freq);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
@@ -207,21 +207,21 @@ int usrp_tx_setup(uhd_usrp_tx_handle *usrp_tx) {
     // Create TX streamer
     error = uhd_tx_streamer_make(&usrp_tx->tx_streamer);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Create TX metadata
     error = uhd_tx_metadata_make(&usrp_tx->tx_metadata, false, 0, 0.1, false, false);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Set up streamer
     error = uhd_usrp_get_tx_stream(usrp, &stream_args, usrp_tx->tx_streamer);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
@@ -260,18 +260,18 @@ void *usrp_rx_thread(void *arg) {
         // 受信サンプル数が想定と異なる場合
         if (actual_num_samps != RX_NUM_SAMPS) {
             // エラー有りの場合は解放して終了
-            printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
+            fprintf(stderr, "Streaming error: actual_num_samps = %zu\n", actual_num_samps);
             break;
 
             // エラー有りの場合はContinueする
-            // printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
+            // fprintf(stderr, "Streaming error: actual_num_samps = %zu\n", actual_num_samps);
             // memset(recv_buf + actual_num_samps * 2, 0, (RX_NUM_SAMPS - actual_num_samps) * sizeof(int16_t) * 2);
             // continue;
         }
 
         if (!lfrb_write(&lfrb, recv_buf, RX_NUM_SAMPS * 2)) {
             // バッファ溢れの場合
-            printf("Ring buffer overflow.\n");
+            fprintf(stderr, "Ring buffer overflow.\n");
             break;
         }
     }
@@ -301,11 +301,11 @@ void *usrp_tx_thread(void *arg) {
     generate_bits(bits, n_bits);
 
     // 生成したビット列を表示
-    printf("Generated bits (%d bits): ", n_bits);
+    fprintf(stdout, "Generated bits (%d bits): ", n_bits);
     for (int i = 0; i < n_bits; ++i) {
-        printf("%d", bits[i]);
+        fprintf(stdout, "%d", bits[i]);
     }
-    printf("\n");
+    fprintf(stdout, "\n");
 
     // ガウスフィルタ係数の構築
     int sps = get_samples_per_symbol(TX_SAMP_RATE);
@@ -324,8 +324,8 @@ void *usrp_tx_thread(void *arg) {
         return NULL;
     }
 
-    printf("Modulated %d bits into %d samples\n", n_bits, n_samples);
-    printf("\n");
+    fprintf(stdout, "Modulated %d bits into %d samples\n", n_bits, n_samples);
+    fprintf(stdout, "\n");
 
     // `iq_len_raw_x2`が`TX_NUM_SAMPS`の倍数になるように切り上げ
     int iq_block = 2 * TX_NUM_SAMPS;
@@ -379,11 +379,11 @@ void *usrp_tx_thread(void *arg) {
         // 送信サンプル数が想定と異なる場合
         if (actual_num_samps != TX_NUM_SAMPS) {
             // エラー有りの場合は解放して終了
-            printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
+            fprintf(stderr, "Streaming error: actual_num_samps = %zu\n", actual_num_samps);
             break;
 
             // エラー有りの場合はContinueする
-            // printf("Streaming error: actual_num_samps = %zu\n", actual_num_samps);
+            // fprintf(stderr, "Streaming error: actual_num_samps = %zu\n", actual_num_samps);
             // memset(recv_buf + actual_num_samps * 2, 0, (TX_NUM_SAMPS - actual_num_samps) * sizeof(int16_t) * 2);
             // continue;
         }
@@ -402,11 +402,11 @@ void *usrp_tx_thread(void *arg) {
         // Set frequency
         uhd_error error = uhd_usrp_set_tx_freq(usrp_tx->usrp, &tune_request, usrp_tx->tx_channel, &tune_result);
         if (error) {
-            printf("TX freq set error: %u\n", error);
+            fprintf(stderr, "TX freq set error: %u\n", error);
             break;
         }
 
-        printf("TX freq changed: %f Hz\n", usrp_tx->tx_freq);
+        fprintf(stdout, "TX freq changed: %f Hz\n", usrp_tx->tx_freq);
 
         // 1秒スリープ
         usleep(1000000);
@@ -424,14 +424,14 @@ int usrp_rx_close(uhd_usrp_rx_handle *usrp_rx) {
     // Cleaning up RX streamer
     error = uhd_rx_streamer_free(&usrp_rx->rx_streamer);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Cleaning up RX metadata
     error = uhd_rx_metadata_free(&usrp_rx->rx_metadata);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
@@ -445,14 +445,14 @@ int usrp_tx_close(uhd_usrp_tx_handle *usrp_tx) {
     // Cleaning up TX streamer
     error = uhd_tx_streamer_free(&usrp_tx->tx_streamer);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
     // Cleaning up TX metadata
     error = uhd_tx_metadata_free(&usrp_tx->tx_metadata);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
@@ -466,7 +466,7 @@ int usrp_close(uhd_usrp_handle *usrp) {
     // Cleaning up USRP
     error = uhd_usrp_free(usrp);
     if (error) {
-        printf("%u\n", error);
+        fprintf(stderr, "%u\n", error);
         return error;
     }
 
