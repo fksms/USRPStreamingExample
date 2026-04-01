@@ -5,7 +5,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "Launch",
-            "program": "${workspaceFolder}/build/usrp_streaming_test",
+            "program": "${workspaceFolder}/build/wisun-sniffer",
             "args": [],
             "env": [],
             "cwd": "${workspaceFolder}"
