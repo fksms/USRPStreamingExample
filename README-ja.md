@@ -23,7 +23,7 @@
    USRP から 10 Msps で複素ベースバンドサンプルを受信します。
 2. `channelizer_thread`
    入力帯域を 50 チャネルへ分割し、CFAR によるバースト検出を行い、確定したバーストを後段へ渡します。
-3. `demod_thread`
+3. `demodulator_thread`
    バースト候補を復調し、復元したビット列を解析します。
 
 ## リポジトリ構成
@@ -32,7 +32,7 @@
 - `usrp.c`: UHD デバイス初期化とストリーミング処理
 - `channelizer.c`: polyphase channelizer、CFAR、バーストグルーピング
 - `channelizer_test.c`: 組み込みセルフテスト
-- `demod.c`: バースト復調処理
+- `demodulator.c`: バースト復調処理
 - `fsk.c`: FSK/GFSK 関連処理
 - `packet.c`: パケット簡易解析と payload 出力
 - `brb.c`: channelizer から demodulator への blocking ring buffer
@@ -109,7 +109,7 @@ brew install cmake pkgconf uhd fftw
 ### 3. USRP でライブ受信する場合
 
 ```bash
-./build/wisun-sniffer -a RX2 -c 0 -f 924300000 -g 30
+./build/wisun-sniffer
 ```
 
 実行時には主に以下のような情報が標準出力へ表示されます。

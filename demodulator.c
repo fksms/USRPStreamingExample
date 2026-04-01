@@ -18,7 +18,7 @@ extern _Atomic bool running;
 extern BlockingRingBuffer brb;
 // ------------------------------------------------
 
-void *demod_thread(void *arg) {
+void *demodulator_thread(void *arg) {
 
     // int counter = 0;
 

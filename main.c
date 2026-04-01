@@ -12,7 +12,7 @@
 #include "brb.h"
 #include "channelizer.h"
 #include "channelizer_test.h"
-#include "demod.h"
+#include "demodulator.h"
 #include "lfrb.h"
 #include "usrp.h"
 
@@ -224,10 +224,10 @@ int main(int argc, char *argv[]) {
     // ------------------------------------------------------------
 
     // ------------------------Create thread-----------------------
-    // Create demod thread
-    pthread_t demodThread;
-    if (pthread_create(&demodThread, &attr, demod_thread, NULL)) {
-        fprintf(stderr, "Create demod thread failed\n");
+    // Create demodulator thread
+    pthread_t demodulatorThread;
+    if (pthread_create(&demodulatorThread, &attr, demodulator_thread, NULL)) {
+        fprintf(stderr, "Create demodulator thread failed\n");
         return -1;
     }
 
@@ -255,6 +255,7 @@ int main(int argc, char *argv[]) {
 #endif // TX_TEST
     // ------------------------------------------------------------
 
+    // Main thread waits until SIGINT is received
     while (atomic_load(&running)) {
         sleep(1);
     }
@@ -284,9 +285,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    // Join demod thread
-    if (pthread_join(demodThread, NULL)) {
-        fprintf(stderr, "Join demod thread failed\n");
+    // Join demodulator thread
+    if (pthread_join(demodulatorThread, NULL)) {
+        fprintf(stderr, "Join demodulator thread failed\n");
         return -1;
     }
     // ------------------------------------------------------------

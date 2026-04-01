@@ -23,7 +23,7 @@ The executable starts three main worker threads:
    Reads complex baseband samples from a USRP at 10 Msps.
 2. `channelizer_thread`
    Splits the input into 50 channels, runs CFAR-based burst detection, and forwards completed bursts.
-3. `demod_thread`
+3. `demodulator_thread`
    Demodulates burst candidates and analyzes the recovered bit stream.
 
 ## Repository Layout
@@ -32,7 +32,7 @@ The executable starts three main worker threads:
 - `usrp.c`: UHD device setup and streaming
 - `channelizer.c`: polyphase channelizer, CFAR, burst grouping
 - `channelizer_test.c`: built-in self-tests
-- `demod.c`: burst demodulation flow
+- `demodulator.c`: burst demodulation flow
 - `fsk.c`: FSK/GFSK modem utilities
 - `packet.c`: simple packet field parsing and payload dump
 - `brb.c`: blocking ring buffer between channelizer and demodulator
@@ -109,7 +109,7 @@ This generates a synthetic modulated signal for the specified channel, pushes it
 ### 3. Start live sniffing from a USRP
 
 ```bash
-./build/wisun-sniffer -a RX2 -c 0 -f 924300000 -g 30
+./build/wisun-sniffer
 ```
 
 Typical runtime output includes:
