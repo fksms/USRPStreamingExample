@@ -1,3 +1,5 @@
+日本語版は[こちら](./README-ja.md)<br><br>
+
 # Wi-SUN ARIB STD-T108 Sniffer
 
 This project is a Wi-SUN sniffer prototype for the Japanese profile defined by ARIB STD-T108. It captures IQ samples from a USRP, splits the 10 MHz input bandwidth into narrow channels, detects bursts, demodulates FSK/GFSK packets, and prints basic PHY parsing results to standard output.
@@ -14,6 +16,8 @@ The current codebase already includes:
 - Built-in self-tests for the channelizer and modem loopback path
 
 At the moment, packet parsing is still focused on PHY-level inspection rather than a full Wi-SUN / IEEE 802.15.4g decoder.
+
+<img src="./assets/capture.gif" alt="capture">
 
 ## Processing Pipeline
 
@@ -41,6 +45,14 @@ The executable starts three main worker threads:
 - `CMakeLists.txt`: CMake build definition
 
 ## Requirements
+
+### Hardware
+
+- MacBook Pro (M1 Pro, 2021, 32GB RAM)
+- USRP B210 / LibreSDR B220mini (USRP Clone)
+- DIAMOND SRH805S small handheld antenna
+
+The above hardware has been tested and confirmed to work.
 
 ### Runtime / development dependencies
 

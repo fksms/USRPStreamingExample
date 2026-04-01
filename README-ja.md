@@ -15,6 +15,8 @@
 
 現時点では、Wi-SUN / IEEE 802.15.4g の完全なデコーダではなく、PHY レベル中心の観測・検証用途の実装です。
 
+<img src="./assets/capture.gif" alt="capture">
+
 ## 処理パイプライン
 
 実行時には主に以下の 3 つのワーカースレッドが動作します。
@@ -41,6 +43,14 @@
 - `CMakeLists.txt`: CMake ビルド定義
 
 ## 必要環境
+
+### ハードウェア
+
+- MacBook Pro (M1 Pro, 2021, 32GB RAM)
+- USRP B210 / LibreSDR B220mini (USRP Clone)
+- DIAMOND SRH805S 小型ハンディーアンテナ
+
+上記で動作確認済みです。
 
 ### 依存関係
 
