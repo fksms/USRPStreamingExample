@@ -30,6 +30,10 @@ The executable starts three main worker threads:
 3. `demodulator_thread`
    Demodulates burst candidates and analyzes the recovered bit stream.
 
+The overall architecture is as follows:
+
+<img src="./assets/architecture.png" alt="architecture">
+
 ## Repository Layout
 
 - `main.c`: program entry point, CLI options, thread setup

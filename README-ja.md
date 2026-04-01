@@ -28,6 +28,10 @@
 3. `demodulator_thread`
    バースト候補を復調し、復元したビット列を解析します。
 
+全体アーキテクチャは以下の通りです。
+
+<img src="./assets/architecture.png" alt="architecture">
+
 ## リポジトリ構成
 
 - `main.c`: エントリポイント、CLI オプション、スレッド起動
