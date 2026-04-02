@@ -1,10 +1,48 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define PREAMBLE_MIN 4    // [Bytes]
 #define PREAMBLE_MAX 1000 // [Bytes]
+
+// PN9シーケンスジェネレータの状態
+typedef struct {
+    uint16_t lfsr; // 9ビット LFSR
+} pn9_state_t;
+
+// PN9シーケンスジェネレータを初期化
+static void pn9_init(pn9_state_t *state, uint16_t seed) {
+    state->lfsr = seed & 0x1FF; // 9ビットマスク
+    // 仕様書: "enabled after the first clock cycle" -> 1クロック先に進める
+    uint16_t feedback = ((state->lfsr) ^ ((state->lfsr) >> 5)) & 1;
+    state->lfsr = ((state->lfsr) >> 1) | (feedback << 8);
+}
+
+// PN9シーケンスから次のビットを取得
+static uint8_t pn9_next_bit(pn9_state_t *state) {
+    uint8_t bit = (state->lfsr >> 8) & 1; // MSB（Q9側）から出力
+    uint16_t feedback = ((state->lfsr) ^ ((state->lfsr) >> 5)) & 1;
+    state->lfsr = ((state->lfsr) >> 1) | (feedback << 8); // 右シフト
+    return bit;
+}
+
+// ホワイトニング / デホワイトニング処理（XORの可逆性により同一関数）
+static void whitening_process(uint8_t *data, int n_bytes, uint16_t seed) {
+    pn9_state_t pn9;
+    pn9_init(&pn9, seed);
+
+    for (int i = 0; i < n_bytes; ++i) {
+        uint8_t xored = 0;
+        for (int bit_idx = 7; bit_idx >= 0; --bit_idx) { // MSB first
+            uint8_t pn_bit = pn9_next_bit(&pn9);
+            uint8_t data_bit = (data[i] >> bit_idx) & 1;
+            xored |= (data_bit ^ pn_bit) << bit_idx;
+        }
+        data[i] = xored;
+    }
+}
 
 void analyze_packet(const uint8_t *rx_bits, int n_rx_bits) {
     // プリアンブルパターン（8ビット）
@@ -117,9 +155,15 @@ void analyze_packet(const uint8_t *rx_bits, int n_rx_bits) {
         return;
     }
 
-    // ペイロードを出力
+    // ペイロード取得とホワイトニング処理
     int n_bytes = (payload_bits + 7) / 8;
-    fprintf(stdout, "Payload bytes: ");
+    uint8_t *payload_data = (uint8_t *)malloc(n_bytes);
+    if (payload_data == NULL) {
+        fprintf(stdout, "Memory allocation failed\n");
+        return;
+    }
+
+    // ビット配列からバイト配列に変換
     for (int i = 0; i < n_bytes; ++i) {
         uint8_t val = 0;
         for (int b = 0; b < 8; ++b) {
@@ -130,7 +174,20 @@ void analyze_packet(const uint8_t *rx_bits, int n_rx_bits) {
                 val = (val << 1);
             }
         }
-        fprintf(stdout, "%02X ", val);
+        payload_data[i] = val;
+    }
+
+    // data_whitening が1なら Dewhitening処理を実施
+    if (data_whitening == 1) {
+        whitening_process(payload_data, n_bytes, 0x1FF);
+    }
+
+    // ペイロードを出力
+    fprintf(stdout, "Payload bytes: ");
+    for (int i = 0; i < n_bytes; ++i) {
+        fprintf(stdout, "%02X ", payload_data[i]);
     }
     fprintf(stdout, "\n");
+
+    free(payload_data);
 }
