@@ -11,6 +11,7 @@
 - CFAR によるバースト検出とバーストグルーピング
 - FSK/GFSK 復調
 - preamble、SFD、PHR、payload の簡易解析
+- Wireshark 向け PCAP ファイル出力 / FIFO ストリーミング
 - channelizer と modem loopback のセルフテスト
 
 現時点では、Wi-SUN / IEEE 802.15.4g の完全なデコーダではなく、PHY レベル中心の観測・検証用途の実装です。
@@ -98,6 +99,8 @@ brew install cmake pkgconf uhd fftw
 -f  受信周波数 [Hz]
 -g  受信ゲイン
 -m  指定チャネルで FSK/GFSK modem loopback self-test を実行して終了
+-p  復元した 802.15.4 フレームを PCAP ファイルへ出力
+-P  復元した 802.15.4 フレームを PCAP FIFO へストリーミング
 -t  channelizer の single-tone self-test を実行して終了
 -h  ヘルプ表示
 ```
@@ -136,11 +139,31 @@ brew install cmake pkgconf uhd fftw
 
 停止は `Ctrl+C` です。
 
+### 4. PCAP ファイルへ保存する場合
+
+```bash
+./build/wisun-sniffer -p capture.pcap
+```
+
+抽出した PSDU から FCS を除いた IEEE 802.15.4 フレームを PCAP に保存します。生成したファイルは Wireshark でそのまま開けます。
+
+### 5. Wireshark にリアルタイム入力する場合
+
+Wireshark 側で FIFO を先に開いてから、sniffer を起動します。
+
+```bash
+wireshark -k -i /tmp/wisun.pipe
+./build/wisun-sniffer -P /tmp/wisun.pipe
+```
+
+FIFO が存在しなければ sniffer 側で自動作成します。Wireshark が先に FIFO を開いていない場合は、オープンに失敗して終了します。
+
 ## ライブ受信時の注意
 
 - 現在の実装は UHD で利用可能な USRP と 10 Msps の受信を前提としています。
 - デフォルトの周波数設定は日本向け Wi-SUN 観測を意識したものです。実際の環境に応じて周波数、アンテナ、ゲイン、チャネルを調整してください。
 - パケット解析は現状 PHY レベルの情報表示と payload のダンプが中心であり、上位層の完全な解析は未実装です。
+- PCAP / FIFO へは `LINKTYPE_IEEE802_15_4_NOFCS` で出力するため、FCS は保存しません。
 
 ## 既知の制限
 
@@ -151,4 +174,4 @@ brew install cmake pkgconf uhd fftw
 ## 今後の改善候補
 
 - ARIB STD-T108 / IEEE 802.15.4g のより詳細なデコード
-- PCAP や構造化ログへの出力
+- 構造化ログや追加メタデータ付きキャプチャの出力

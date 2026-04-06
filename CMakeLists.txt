@@ -24,7 +24,7 @@ find_package(UHD REQUIRED)
 find_package(FFTW REQUIRED)
 
 # 実行ファイルを作成
-add_executable(${PROJECT_NAME} main.c usrp.c lfrb.c channelizer.c fir_kaiser.c brb.c demodulator.c fsk.c channelizer_test.c packet.c)
+add_executable(${PROJECT_NAME} main.c usrp.c lfrb.c channelizer.c fir_kaiser.c brb.c demodulator.c fsk.c channelizer_test.c packet.c pcap_writer.c)
 
 # インクルードするディレクトリの設定
 target_include_directories(${PROJECT_NAME} PRIVATE

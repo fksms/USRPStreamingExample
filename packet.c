@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "pcap_writer.h"
+
 #define PREAMBLE_MIN 4    // [Bytes]
 #define PREAMBLE_MAX 1000 // [Bytes]
 
@@ -42,6 +44,34 @@ static void whitening_process(uint8_t *data, int n_bytes, uint16_t seed) {
         }
         data[i] = xored;
     }
+}
+
+static int get_fcs_length_bytes(int fcs_type) {
+    // IEEE 802.15.4g SUN PHY uses the PHR FCS Type bit to select a 2-byte or 4-byte FCS.
+    return (fcs_type == 0) ? 2 : 4;
+}
+
+bool packet_export_psdu_to_pcap(const uint8_t *psdu, int psdu_len, int fcs_type) {
+    if (!pcap_writer_is_enabled()) {
+        return true;
+    }
+    if (psdu == NULL || psdu_len <= 0) {
+        fprintf(stderr, "Cannot export empty PSDU to PCAP\n");
+        return false;
+    }
+
+    int fcs_len = get_fcs_length_bytes(fcs_type);
+    if (psdu_len < fcs_len) {
+        fprintf(stderr, "PSDU too short for FCS stripping: psdu_len=%d, fcs_len=%d\n", psdu_len, fcs_len);
+        return false;
+    }
+
+    int frame_len_without_fcs = psdu_len - fcs_len;
+    if (!pcap_writer_write_packet(psdu, (size_t)frame_len_without_fcs)) {
+        return false;
+    }
+
+    return true;
 }
 
 void analyze_packet(const uint8_t *rx_bits, int n_rx_bits) {
@@ -188,6 +218,10 @@ void analyze_packet(const uint8_t *rx_bits, int n_rx_bits) {
         fprintf(stdout, "%02X ", payload_data[i]);
     }
     fprintf(stdout, "\n");
+
+    if (!packet_export_psdu_to_pcap(payload_data, n_bytes, fcs_type)) {
+        fprintf(stderr, "Failed to export packet to PCAP\n");
+    }
 
     free(payload_data);
 }

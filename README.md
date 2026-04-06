@@ -13,6 +13,7 @@ The current codebase already includes:
 - Burst detection with CFAR and burst grouping
 - FSK/GFSK demodulation
 - Simple packet analysis for preamble, SFD, PHR, and payload dump
+- PCAP file export and FIFO streaming for Wireshark
 - Built-in self-tests for the channelizer and modem loopback path
 
 At the moment, packet parsing is still focused on PHY-level inspection rather than a full Wi-SUN / IEEE 802.15.4g decoder.
@@ -100,6 +101,8 @@ The executable is generated at:
 -f  RX frequency in Hz
 -g  RX gain
 -m  Run FSK/GFSK modem loopback self-test on the specified channel and exit
+-p  Write recovered 802.15.4 frames to a PCAP file
+-P  Stream recovered 802.15.4 frames to a PCAP FIFO for Wireshark
 -t  Run the channelizer single-tone self-test and exit
 -h  Print help
 ```
@@ -138,11 +141,31 @@ Typical runtime output includes:
 
 Stop the program with `Ctrl+C`.
 
+### 4. Save packets to a PCAP file
+
+```bash
+./build/wisun-sniffer -p capture.pcap
+```
+
+The sniffer writes recovered IEEE 802.15.4 frames to a PCAP file after removing the FCS bytes from the PSDU so that Wireshark can dissect them as `LINKTYPE_IEEE802_15_4_NOFCS`.
+
+### 5. Stream packets to Wireshark in real time
+
+Open the FIFO in Wireshark first, then start the sniffer:
+
+```bash
+wireshark -k -i /tmp/wisun.pipe
+./build/wisun-sniffer -P /tmp/wisun.pipe
+```
+
+If the FIFO does not exist yet, the sniffer creates it automatically. If Wireshark is not already listening on the FIFO, the sniffer exits with an error so that the startup order is explicit.
+
 ## Notes for Live Capture
 
 - The current capture path expects a USRP that works with UHD and can sample at 10 Msps.
 - The default tuning is meant for Japanese Wi-SUN observations. Adjust frequency, antenna, gain, and channel to match your hardware and RF environment.
 - The packet analyzer currently prints PHY-oriented information and raw payload bytes. Higher-layer decoding is not implemented yet.
+- PCAP and FIFO export use `LINKTYPE_IEEE802_15_4_NOFCS`, so the exported frames do not include the FCS bytes.
 
 ## Known Limitations
 
@@ -153,4 +176,4 @@ Stop the program with `Ctrl+C`.
 ## Future Improvements
 
 - Add richer ARIB STD-T108 / IEEE 802.15.4g packet decoding
-- Export decoded packets to PCAP or structured logs
+- Add structured logs or richer capture metadata

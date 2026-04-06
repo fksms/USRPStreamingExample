@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <uhd.h>
 
@@ -14,6 +15,7 @@
 #include "channelizer_test.h"
 #include "demodulator.h"
 #include "lfrb.h"
+#include "pcap_writer.h"
 #include "usrp.h"
 
 // 送信テスト時は以下をコメントアウト
@@ -39,6 +41,8 @@ void print_help(void) {
                     "    -f (RX frequency in Hz)\n"
                     "    -g (RX gain)\n"
                     "    -m (run FSK/GFSK modem loopback self-test on channel and exit)\n"
+                    "    -p (write decoded frames to a PCAP file)\n"
+                    "    -P (stream decoded frames to a PCAP FIFO for Wireshark)\n"
                     "    -t (run channelizer self-test and exit)\n"
                     "    -h (print this help message)\n");
 }
@@ -49,6 +53,7 @@ int main(int argc, char *argv[]) {
 
     // Register signal handler for SIGINT (Ctrl+C)
     signal(SIGINT, handle_sigint);
+    signal(SIGPIPE, SIG_IGN);
 
     int option = 0;
 
@@ -71,10 +76,14 @@ int main(int argc, char *argv[]) {
     // --------------------For Test--------------------
     bool run_channelizer_single_tone_test = false;
     int run_modem_loopback_channel = -1;
+    pcap_writer_config_t pcap_config = {
+        .mode = PCAP_WRITER_MODE_DISABLED,
+        .path = NULL,
+    };
     // ------------------------------------------------
 
     // Process options
-    while ((option = getopt(argc, argv, "a:c:f:g:m:th")) != -1) {
+    while ((option = getopt(argc, argv, "a:c:f:g:m:p:P:th")) != -1) {
         switch (option) {
 
         case 'a':
@@ -97,6 +106,16 @@ int main(int argc, char *argv[]) {
             run_modem_loopback_channel = atoi(optarg);
             break;
 
+        case 'p':
+            pcap_config.mode = PCAP_WRITER_MODE_FILE;
+            pcap_config.path = strdup(optarg);
+            break;
+
+        case 'P':
+            pcap_config.mode = PCAP_WRITER_MODE_FIFO;
+            pcap_config.path = strdup(optarg);
+            break;
+
         case 't':
             run_channelizer_single_tone_test = true;
             break;
@@ -109,6 +128,11 @@ int main(int argc, char *argv[]) {
             print_help();
             return 0;
         }
+    }
+
+    if (pcap_config.path != NULL && pcap_config.mode != PCAP_WRITER_MODE_DISABLED) {
+        fprintf(stdout, "PCAP export enabled: mode=%s path=%s\n",
+                (pcap_config.mode == PCAP_WRITER_MODE_FILE) ? "file" : "fifo", pcap_config.path);
     }
 
     // ----------------------------Test----------------------------
@@ -134,6 +158,10 @@ int main(int argc, char *argv[]) {
     lfrb_init(&lfrb);
     if (!brb_init(&brb)) {
         fprintf(stderr, "Init Blocking Ring Buffer failed\n");
+        return -1;
+    }
+
+    if (!pcap_writer_init(&pcap_config)) {
         return -1;
     }
 
@@ -325,6 +353,8 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Destroy Blocking Ring Buffer failed\n");
         return -1;
     }
+
+    pcap_writer_close();
 
     return 0;
 }
